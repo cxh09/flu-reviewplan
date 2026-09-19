@@ -26,19 +26,20 @@ void showInfoToast(String message) {
 void showSuccessToast(String message) {
   final context = _appContext;
   if (context == null) return;
-  TToast.showSuccess(message, context: context);
+  // 图标+文字型 Toast 默认只允许 1 行（maxWidth 191），长文案会被省略号截断，这里放开到 2 行。
+  TToast.showSuccess(message, context: context, maxLines: 2);
 }
 
 /// 警告提示
 void showWarningToast(String message) {
   final context = _appContext;
   if (context == null) return;
-  TToast.showWarning(message, context: context);
+  TToast.showWarning(message, context: context, maxLines: 2);
 }
 
 /// 错误提示
 void showErrorToast(String message) {
   final context = _appContext;
   if (context == null) return;
-  TToast.showFail(message, context: context);
+  TToast.showFail(message, context: context, maxLines: 2);
 }

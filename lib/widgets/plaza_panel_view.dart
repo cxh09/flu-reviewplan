@@ -3,41 +3,40 @@ import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../data/plaza_data.dart';
-import '../models/todo.dart';
+import '../models/collection.dart';
+import '../models/plaza_item.dart';
 import 'app_ui.dart';
 
-/// 从底部滑出的待办清单面板。
+/// 从底部滑出的日程广场面板。
 ///
-/// 长按卡片拖到日历上任意位置即可排班；把计划拖到面板上则退回待办。
-class TodoPanelView extends StatelessWidget {
-  const TodoPanelView({
+/// 只做浏览与排班：长按某条日程拖到日历上任意位置即可排班；
+/// 点右侧日历图标直接把它排到今天。取消中间的「待办清单」缓冲，看到即可排。
+class PlazaPanelView extends StatelessWidget {
+  const PlazaPanelView({
     super.key,
-    required this.todos,
+    required this.collections,
     required this.draggingId,
     required this.onClose,
-    required this.onScheduleTodo,
-    required this.onRemoveTodo,
     required this.onGoPlaza,
     required this.onDragStart,
     required this.onDragUpdate,
     required this.onDragEnd,
   });
 
-  final List<Todo> todos;
+  final List<Collection> collections;
 
   /// 当前正在拖拽的条目 id（被拖起来的卡片压暗）
   final ValueListenable<String?> draggingId;
 
   final VoidCallback onClose;
 
-  /// 「直接排班」：把这条待办直接排到今天的时间线上
-  final ValueChanged<Todo> onScheduleTodo;
-  final ValueChanged<Todo> onRemoveTodo;
   final VoidCallback onGoPlaza;
 
-  final void Function(Todo todo, Offset globalPosition) onDragStart;
+  final void Function(PlazaItem item, Offset globalPosition) onDragStart;
   final ValueChanged<Offset> onDragUpdate;
   final VoidCallback onDragEnd;
+
+  bool get _isEmpty => collections.every((collection) => collection.items.isEmpty);
 
   @override
   Widget build(BuildContext context) {
@@ -81,12 +80,30 @@ class TodoPanelView extends StatelessWidget {
             child: Row(
               children: <Widget>[
                 const Text(
-                  '待办清单',
+                  '日程广场',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(width: 8),
-                MetaChip(text: '${todos.length}'),
+                MetaChip(text: '${collections.length} 个合集'),
                 const Spacer(),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onGoPlaza,
+                  child: Row(
+                    children: <Widget>[
+                      Text(
+                        '管理合集',
+                        style: TextStyle(fontSize: 12, color: theme.brandNormalColor),
+                      ),
+                      Icon(
+                        TIcons.chevron_right,
+                        size: 16,
+                        color: theme.brandNormalColor,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: onClose,
@@ -103,7 +120,7 @@ class TodoPanelView extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    '长按卡片拖到日历上任意位置即可排班；把计划拖到下方「取消排班」条可以退回待办。',
+                    '长按日程拖到日历上任意位置即可排班；拖完可以在日程表上继续调时间。',
                     style: TextStyle(
                       fontSize: 11,
                       height: 1.6,
@@ -116,24 +133,26 @@ class TodoPanelView extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: todos.isEmpty
-                ? EmptyHint(
-                    text: '暂无待办，去日程广场添加',
-                    actionText: '去日程广场',
-                    onAction: onGoPlaza,
+            child: _isEmpty
+                ? SingleChildScrollView(
+                    child: EmptyHint(
+                      text: '日程广场还没有可排的日程\n去广场新建合集、往里加日程',
+                      actionText: '去日程广场',
+                      onAction: onGoPlaza,
+                    ),
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    itemCount: todos.length,
+                    itemCount: collections.length,
                     itemBuilder: (context, index) {
-                      final todo = todos[index];
-                      return _TodoChip(
-                        key: ValueKey<String>(todo.id),
-                        todo: todo,
+                      final collection = collections[index];
+                      if (collection.items.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+                      return _CollectionSection(
+                        collection: collection,
                         draggingId: draggingId,
-                        onSchedule: () => onScheduleTodo(todo),
-                        onRemove: () => onRemoveTodo(todo),
-                        onDragStart: (position) => onDragStart(todo, position),
+                        onDragStart: onDragStart,
                         onDragUpdate: onDragUpdate,
                         onDragEnd: onDragEnd,
                       );
@@ -146,22 +165,91 @@ class TodoPanelView extends StatelessWidget {
   }
 }
 
-class _TodoChip extends StatelessWidget {
-  const _TodoChip({
-    super.key,
-    required this.todo,
+class _CollectionSection extends StatelessWidget {
+  const _CollectionSection({
+    required this.collection,
     required this.draggingId,
-    required this.onSchedule,
-    required this.onRemove,
     required this.onDragStart,
     required this.onDragUpdate,
     required this.onDragEnd,
   });
 
-  final Todo todo;
+  final Collection collection;
   final ValueListenable<String?> draggingId;
-  final VoidCallback onSchedule;
-  final VoidCallback onRemove;
+  final void Function(PlazaItem item, Offset globalPosition) onDragStart;
+  final ValueChanged<Offset> onDragUpdate;
+  final VoidCallback onDragEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.tTheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(2, 8, 2, 6),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 4,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: collection.displayColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    collection.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: theme.textColorPrimary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${collection.items.length} 条',
+                  style: TextStyle(fontSize: 11, color: theme.textColorPlaceholder),
+                ),
+              ],
+            ),
+          ),
+          ...collection.items.map(
+            (item) => _PlazaChip(
+              key: ValueKey<String>(item.id),
+              item: item,
+              draggingId: draggingId,
+              onDragStart: (position) => onDragStart(item, position),
+              onDragUpdate: onDragUpdate,
+              onDragEnd: onDragEnd,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlazaChip extends StatelessWidget {
+  const _PlazaChip({
+    super.key,
+    required this.item,
+    required this.draggingId,
+    required this.onDragStart,
+    required this.onDragUpdate,
+    required this.onDragEnd,
+  });
+
+  final PlazaItem item;
+  final ValueListenable<String?> draggingId;
   final ValueChanged<Offset> onDragStart;
   final ValueChanged<Offset> onDragUpdate;
   final VoidCallback onDragEnd;
@@ -169,12 +257,12 @@ class _TodoChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.tTheme;
-    final color = categoryColor(todo.category);
+    final color = categoryColor(item.category);
 
     return ValueListenableBuilder<String?>(
       valueListenable: draggingId,
       builder: (context, dragging, _) {
-        final isDragging = dragging == todo.id;
+        final isDragging = dragging == item.id;
 
         return AnimatedScale(
           scale: isDragging ? 1.02 : 1,
@@ -213,7 +301,7 @@ class _TodoChip extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            todo.title,
+                            item.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -224,11 +312,11 @@ class _TodoChip extends StatelessWidget {
                           const SizedBox(height: 4),
                           Row(
                             children: <Widget>[
-                              MetaChip(text: todo.level),
+                              MetaChip(text: item.level),
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
-                                  '${todo.category} · ${todo.duration} 分钟',
+                                  '${item.category} · ${item.duration} 分钟',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -241,20 +329,6 @@ class _TodoChip extends StatelessWidget {
                           ),
                         ],
                       ),
-                    ),
-                    IconButton(
-                      onPressed: onSchedule,
-                      icon: const Icon(TIcons.calendar, size: 18),
-                      color: theme.brandNormalColor,
-                      tooltip: '直接排班',
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    IconButton(
-                      onPressed: onRemove,
-                      icon: const Icon(TIcons.delete, size: 18),
-                      color: theme.textColorPlaceholder,
-                      tooltip: '移出待办',
-                      visualDensity: VisualDensity.compact,
                     ),
                   ],
                 ),

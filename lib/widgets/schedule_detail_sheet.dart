@@ -159,20 +159,6 @@ class _ScheduleDetailSheetState extends State<_ScheduleDetailSheet> {
                   onPressed: () => planStore.togglePlanDone(plan.id),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TButton(
-                  variant: TButtonVariant.outline,
-                  colorScheme: TButtonColorScheme.defaultTheme,
-                  icon: const Icon(TIcons.swap_right, size: 16),
-                  child: const Text('退回待办'),
-                  onPressed: () {
-                    planStore.unschedulePlan(plan.id);
-                    Navigator.of(context).maybePop();
-                    if (isOnline) showInfoToast('「${plan.title}」已退回待办清单');
-                  },
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -184,7 +170,7 @@ class _ScheduleDetailSheetState extends State<_ScheduleDetailSheet> {
             onPressed: () {
               planStore.removePlan(plan.id);
               Navigator.of(context).maybePop();
-              if (isOnline) showSuccessToast('「${plan.title}」已删除');
+              if (isOnline) showSuccessToast('日程已删除');
             },
           ),
         ],

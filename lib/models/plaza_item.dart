@@ -2,7 +2,7 @@ import '../data/plaza_data.dart';
 import '../utils/id_utils.dart';
 import '../utils/url_utils.dart';
 
-/// 合集里的日程：未加入待办前的「素材」。
+/// 合集里的日程：直接排到日程表前的「素材」。
 class PlazaItem {
   const PlazaItem({
     required this.id,

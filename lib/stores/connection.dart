@@ -42,8 +42,8 @@ class ConnectionManager extends ChangeNotifier {
 
     showWarningToast(
       _status == ConnectionStatus.unconfigured
-          ? '尚未配置服务端地址，请先到「设置 → 服务端同步」完成配置'
-          : '未连接服务端，当前为只读模式，正在自动重试…',
+          ? '未配置服务端，请先到「设置」配置'
+          : '未连接，只读模式，重试中…',
     );
   }
 

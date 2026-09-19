@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 
 import '../data/plan_data.dart';
 import '../models/plan.dart';
-import '../models/todo.dart';
 import '../services/tombstone_service.dart';
 import '../utils/date_utils.dart';
 import '../utils/id_utils.dart';
@@ -30,7 +29,6 @@ class WeekStats {
 }
 
 /// 复习清单的核心数据（对齐网页版 `src/stores/plan.js`）：
-/// - [todos] 待办清单（还没安排具体时间的复习任务）
 /// - [plans] 排版计划（已安排到某天某个时段的复习任务）
 ///
 /// 全在线模式：数据以云端为唯一来源，本地不落盘；
@@ -43,6 +41,9 @@ class WeekStats {
 ///    全量拷贝在计划上百条时是纯浪费；
 /// 2. 维护一份 `日期 → 当天计划` 的索引，[plansOfDate] 是 O(当天条数)，
 ///    而不是每次全表过滤。
+///
+/// 「日程广场」里的日程是排班的素材库：点一条或把它拖到时间线上，
+/// 就直接生成一条排版计划（[scheduleFromPlaza]），不再有中间的待办缓冲。
 class PlanStore extends ChangeNotifier {
   PlanStore() {
     _rebuildDateIndex();
@@ -50,7 +51,6 @@ class PlanStore extends ChangeNotifier {
 
   String _gaokaoDate = kDefaultGaokaoDate;
   int _gaokaoDateUpdatedAt = 0;
-  final List<Todo> _todos = <Todo>[];
   final List<Plan> _plans = <Plan>[];
 
   /// 每次数据变化 +1。
@@ -68,16 +68,12 @@ class PlanStore extends ChangeNotifier {
   String get gaokaoDate => _gaokaoDate;
   int get gaokaoDateUpdatedAt => _gaokaoDateUpdatedAt;
 
-  /// 待办清单（只读视图，不做拷贝）
-  List<Todo> get todos => UnmodifiableListView<Todo>(_todos);
-
   /// 全部计划（只读视图，不做拷贝）
   List<Plan> get plans => UnmodifiableListView<Plan>(_plans);
 
   // ---------- 派生数据 ----------
 
   int get daysToGaokao => diffDays(todayKey(), _gaokaoDate);
-  int get todoCount => _todos.length;
   int get planCount => _plans.length;
   int get donePlanCount => _plans.where((plan) => plan.done).length;
 
@@ -116,14 +112,6 @@ class PlanStore extends ChangeNotifier {
       done: done,
       rate: total == 0 ? 0 : (done / total * 100).round(),
     );
-  }
-
-  /// 待办里是否已有这条日程（传科目时按「标题 + 科目」判断，与 [addTodo] 去重口径一致）
-  bool hasTodo(String title, [String? category]) {
-    final trimmed = title.trim();
-    if (trimmed.isEmpty) return false;
-    return _todos.any((todo) =>
-        todo.title == trimmed && (category == null || todo.category == category));
   }
 
   // ---------- 按日索引的维护 ----------
@@ -178,52 +166,6 @@ class PlanStore extends ChangeNotifier {
     }
   }
 
-  // ---------- 待办清单 ----------
-
-  /// 加入待办清单，同标题同科目视为同一条
-  Todo? addTodo({
-    required String title,
-    String category = '通用',
-    int duration = 30,
-    String level = '基础',
-    String desc = '',
-    String link = '',
-    String source = 'manual',
-  }) {
-    if (!ensureWritable()) return null;
-
-    final trimmed = title.trim();
-    if (trimmed.isEmpty) return null;
-
-    for (final todo in _todos) {
-      if (todo.title == trimmed && todo.category == category) return todo;
-    }
-
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final todo = Todo(
-      id: createId('todo'),
-      title: trimmed,
-      category: category,
-      duration: duration,
-      level: level,
-      desc: desc,
-      link: sanitizeLink(link),
-      source: source,
-      createdAt: now,
-      updatedAt: now,
-    );
-    _todos.add(todo);
-    _touch();
-    return todo;
-  }
-
-  void removeTodo(String id) {
-    if (!ensureWritable()) return;
-    TombstoneService.markDeleted(id);
-    _todos.removeWhere((todo) => todo.id == id);
-    _touch();
-  }
-
   // ---------- 排版计划 ----------
 
   Plan? _addPlan({
@@ -237,8 +179,6 @@ class PlanStore extends ChangeNotifier {
     required String date,
     required double startHour,
     String note = '',
-    String? todoId,
-    int? originDuration,
   }) {
     if (!ensureWritable()) return null;
 
@@ -254,10 +194,8 @@ class PlanStore extends ChangeNotifier {
       source: source,
       createdAt: now,
       updatedAt: now,
-      todoId: todoId,
       date: date,
       startHour: startHour,
-      originDuration: originDuration,
       note: note,
     );
     _plans.add(plan);
@@ -266,70 +204,36 @@ class PlanStore extends ChangeNotifier {
     return plan;
   }
 
-  /// 把待办清单里的条目拖到时间线上：从待办移到计划
-  Plan? scheduleFromTodo(
-    String todoId,
-    String date,
-    double startHour, {
-    int? duration,
+  /// 把「日程广场」里的一条日程直接排到时间线上（生成一条排版计划）。
+  /// 同一条可反复排到不同时段，不做去重。
+  Plan? scheduleFromPlaza({
+    required String title,
+    required String date,
+    required double startHour,
+    String category = '通用',
+    int duration = kDefaultSlotMinutes,
+    String level = '基础',
+    String desc = '',
+    String link = '',
     String note = '',
   }) {
     if (!ensureWritable()) return null;
 
-    final index = _todos.indexWhere((todo) => todo.id == todoId);
-    if (index == -1) return null;
-
-    final todo = _todos[index];
-    // 待办被「消耗」成计划：记一笔删除，否则合并时会被另一端的副本复活
-    TombstoneService.markDeleted(todo.id);
-    _todos.removeAt(index);
+    final trimmed = title.trim();
+    if (trimmed.isEmpty) return null;
 
     return _addPlan(
-      title: todo.title,
-      category: todo.category,
-      level: todo.level,
-      desc: todo.desc,
-      link: todo.link,
-      source: todo.source,
+      title: trimmed,
+      category: category,
+      level: level,
+      desc: desc,
+      link: link,
+      source: 'plaza',
       date: date,
       startHour: startHour,
-      // 没指定时长时默认用待办的预估耗时，之后再拖边缘调整跨度
-      duration: duration ?? (todo.duration > 0 ? todo.duration : kDefaultSlotMinutes),
-      todoId: todo.id,
-      originDuration: todo.duration,
+      duration: duration > 0 ? duration : kDefaultSlotMinutes,
       note: note,
     );
-  }
-
-  /// 把计划退回到待办清单
-  void unschedulePlan(String planId) {
-    if (!ensureWritable()) return;
-
-    final index = _indexOfPlan(planId);
-    if (index == -1) return;
-
-    final plan = _plans[index];
-    TombstoneService.markDeleted(plan.id);
-    _plans.removeAt(index);
-    _indexRemove(plan);
-
-    final now = DateTime.now().millisecondsSinceEpoch;
-    _todos.add(
-      Todo(
-        id: createId('todo'),
-        title: plan.title,
-        category: plan.category,
-        // 排班时可能被改成了一小时，退回待办还原成条目原本的时长
-        duration: plan.originDuration ?? plan.duration,
-        level: plan.level,
-        desc: plan.desc,
-        link: plan.link,
-        source: plan.source,
-        createdAt: now,
-        updatedAt: now,
-      ),
-    );
-    _touch();
   }
 
   void movePlan(String planId, String date, double startHour) {
@@ -456,7 +360,6 @@ class PlanStore extends ChangeNotifier {
   Map<String, dynamic> buildPayload() => <String, dynamic>{
         'gaokaoDate': _gaokaoDate,
         'gaokaoDateUpdatedAt': _gaokaoDateUpdatedAt,
-        'todos': _todos.map((todo) => todo.toJson()).toList(),
         'plans': _plans.map((plan) => plan.toJson()).toList(),
       };
 
@@ -470,18 +373,8 @@ class PlanStore extends ChangeNotifier {
 
   /// 应用一份远端 / 导入快照（不经过只读校验，调用方保证来源可信）
   void applySnapshot(Map<String, dynamic> data) {
-    final rawTodos = data['todos'];
     final rawPlans = data['plans'];
 
-    if (rawTodos is List) {
-      _todos
-        ..clear()
-        ..addAll(
-          rawTodos
-              .whereType<Map>()
-              .map((item) => Todo.fromJson(item.cast<String, dynamic>())),
-        );
-    }
     if (rawPlans is List) {
       _plans
         ..clear()
@@ -520,11 +413,9 @@ class PlanStore extends ChangeNotifier {
   void resetAll() {
     if (!ensureWritable()) return;
     // 清空也是一次删除：不记标记的话，另一端残留的副本会把数据带回来
-    TombstoneService.markDeletedMany(<String>[
-      ..._todos.map((todo) => todo.id),
-      ..._plans.map((plan) => plan.id),
-    ]);
-    _todos.clear();
+    TombstoneService.markDeletedMany(
+      _plans.map((plan) => plan.id).toList(),
+    );
     _plans.clear();
     _plansByDate.clear();
     _gaokaoDate = kDefaultGaokaoDate;

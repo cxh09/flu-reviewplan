@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bounce/flutter_bounce.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
+
+import '../utils/responsive.dart';
 
 /// 移动端通用视觉组件。
 ///
@@ -11,7 +14,7 @@ class AppCard extends StatelessWidget {
   const AppCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(16),
+    this.padding = const EdgeInsets.all(12),
     this.margin = EdgeInsets.zero,
     this.onTap,
     this.color,
@@ -39,9 +42,10 @@ class AppCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: onTap == null
           ? content
-          : Material(
-              color: Colors.transparent,
-              child: InkWell(onTap: onTap, child: content),
+          : Bounce(
+              duration: const Duration(milliseconds: 120),
+              onPressed: onTap!,
+              child: content,
             ),
     );
   }
@@ -319,7 +323,7 @@ class _SheetFrameState extends State<_SheetFrame>
                 onVerticalDragUpdate: _handleDragUpdate,
                 onVerticalDragEnd: _handleDragEnd,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 2, 8, 8),
+                  padding: const EdgeInsets.fromLTRB(16, 2, 8, 6),
                   child: Row(
                     children: <Widget>[
                       Expanded(
@@ -344,14 +348,14 @@ class _SheetFrameState extends State<_SheetFrame>
               const Divider(height: 1),
               Flexible(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                   child: widget.child,
                 ),
               ),
               if (widget.footer != null) ...<Widget>[
                 const Divider(height: 1),
                 Padding(
-                  padding: EdgeInsets.fromLTRB(20, 12, 20, 12 + bottomInset),
+                  padding: EdgeInsets.fromLTRB(16, 10, 16, 10 + bottomInset),
                   child: widget.footer!,
                 ),
               ] else
@@ -449,7 +453,14 @@ Future<T?> showAppSheetBuilder<T>(BuildContext context, WidgetBuilder builder) {
     transitionDuration: AppMotion.sheet,
     pageBuilder: (context, animation, secondaryAnimation) => Align(
       alignment: Alignment.bottomCenter,
-      child: builder(context),
+      // 平板 / 横屏下弹层不铺满：左右留白 + 限宽居中；窄屏 sideMargin=0、maxWidth=∞，行为不变。
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: context.sheetSideMargin),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: context.sheetMaxWidth),
+          child: builder(context),
+        ),
+      ),
     ),
     transitionBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(
@@ -583,8 +594,9 @@ class ChoiceChips<T> extends StatelessWidget {
       runSpacing: 8,
       children: options.map((option) {
         final isSelected = option == selected;
-        return GestureDetector(
-          onTap: () => onChanged(option),
+        return Bounce(
+          duration: const Duration(milliseconds: 100),
+          onPressed: () => onChanged(option),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
@@ -630,27 +642,30 @@ class EmptyHint extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.tTheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 32),
-      child: Column(
-        children: <Widget>[
-          Icon(icon, size: 40, color: theme.textColorPlaceholder),
-          const SizedBox(height: 12),
-          Text(
-            text,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, height: 1.7, color: theme.textColorPlaceholder),
-          ),
-          if (actionText != null && onAction != null) ...<Widget>[
-            const SizedBox(height: 16),
-            TButton(
-              size: TButtonSize.small,
-              variant: TButtonVariant.outline,
-              colorScheme: TButtonColorScheme.primary,
-              child: Text(actionText!),
-              onPressed: onAction,
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          children: <Widget>[
+            Icon(icon, size: 40, color: theme.textColorPlaceholder),
+            const SizedBox(height: 12),
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, height: 1.7, color: theme.textColorPlaceholder),
             ),
+            if (actionText != null && onAction != null) ...<Widget>[
+              const SizedBox(height: 16),
+              TButton(
+                size: TButtonSize.small,
+                variant: TButtonVariant.outline,
+                colorScheme: TButtonColorScheme.primary,
+                child: Text(actionText!),
+                onPressed: onAction,
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

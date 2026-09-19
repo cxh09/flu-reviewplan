@@ -14,6 +14,7 @@ import '../stores/plan_store.dart';
 import '../stores/sync_store.dart';
 import '../utils/app_globals.dart';
 import '../utils/app_tabs.dart';
+import '../utils/responsive.dart';
 import '../widgets/app_tab_bar.dart';
 
 /// 应用外壳（对应网页版 `layouts/BasicLayout.vue`）：
@@ -65,39 +66,121 @@ class _HomeShellState extends State<HomeShell> {
   Widget build(BuildContext context) {
     final theme = context.tTheme;
     final connection = context.watch<ConnectionManager>();
+    // 平板 / 横屏大屏（宽度达到阈值）改用左侧导航栏，把纵向空间留给内容。
+    final useSideNav = context.useSideNav;
+
+    final contentColumn = Column(
+      children: <Widget>[
+        _TopBar(title: _titles[_index]),
+        if (connection.status != ConnectionStatus.online)
+          _ConnectionNotice(
+            status: connection.status,
+            message: context.watch<SyncStore>().connectionMessage,
+            onGoSettings: _goToSettings,
+          ),
+        Expanded(
+          child: IndexedStack(
+            index: _index,
+            children: const <Widget>[
+              HomePage(),
+              SchedulePage(),
+              PlazaPage(),
+              SettingsPage(),
+            ],
+          ),
+        ),
+      ],
+    );
 
     return Scaffold(
       key: appRootKey,
-      backgroundColor: theme.bgColorPage,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: <Widget>[
-            _TopBar(title: _titles[_index]),
-            if (connection.status != ConnectionStatus.online)
-              _ConnectionNotice(
-                status: connection.status,
-                message: context.watch<SyncStore>().connectionMessage,
-                onGoSettings: _goToSettings,
-              ),
-            Expanded(
-              child: IndexedStack(
-                index: _index,
-                children: const <Widget>[
-                  HomePage(),
-                  SchedulePage(),
-                  PlazaPage(),
-                  SettingsPage(),
+      backgroundColor: theme.bgColorContainer,
+      body: useSideNav
+          ? SafeArea(
+              top: false,
+              child: Row(
+                children: <Widget>[
+                  _SideNav(index: _index, tabs: _tabs),
+                  Container(width: 0.5, color: theme.componentStrokeColor),
+                  Expanded(child: contentColumn),
                 ],
               ),
+            )
+          : SafeArea(
+              bottom: false,
+              top: false,
+              child: contentColumn,
             ),
-          ],
+      bottomNavigationBar: useSideNav
+          ? null
+          : AppTabBar(
+              currentIndex: _index,
+              onChanged: goToTab,
+              items: _tabs,
+            ),
+    );
+  }
+}
+
+/// 平板 / 横屏下的左侧导航栏（对应手机端的底部标签栏）。
+class _SideNav extends StatelessWidget {
+  const _SideNav({required this.index, required this.tabs});
+
+  final int index;
+  final List<AppTabBarItem> tabs;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.tTheme;
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return Material(
+      color: theme.bgColorContainer,
+      child: Padding(
+        padding: EdgeInsets.only(top: topInset),
+        child: NavigationRail(
+          backgroundColor: Colors.transparent,
+          selectedIndex: index,
+          onDestinationSelected: goToTab,
+          labelType: NavigationRailLabelType.all,
+          indicatorColor: theme.brandLightColor,
+          selectedIconTheme: IconThemeData(color: theme.brandNormalColor),
+          unselectedIconTheme: IconThemeData(color: theme.textColorPlaceholder),
+          selectedLabelTextStyle: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: theme.brandNormalColor,
+          ),
+          unselectedLabelTextStyle: TextStyle(
+            fontSize: 12,
+            color: theme.textColorPlaceholder,
+          ),
+          leading: Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 12),
+            child: Container(
+              width: 30,
+              height: 30,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(7),
+                border: Border.all(
+                  color: theme.componentStrokeColor,
+                  width: 0.5,
+                ),
+              ),
+              child: Image.asset('assets/app_icon_plain.png', fit: BoxFit.cover),
+            ),
+          ),
+          destinations: tabs
+              .map(
+                (item) => NavigationRailDestination(
+                  icon: Icon(item.icon, size: 22),
+                  label: Text(item.label),
+                ),
+              )
+              .toList(),
         ),
-      ),
-      bottomNavigationBar: AppTabBar(
-        currentIndex: _index,
-        onChanged: goToTab,
-        items: _tabs,
       ),
     );
   }
@@ -114,6 +197,7 @@ class _TopBar extends StatelessWidget {
     final theme = context.tTheme;
     final appStore = context.watch<AppStore>();
     final days = context.watch<PlanStore>().daysToGaokao;
+    final statusBarHeight = MediaQuery.of(context).padding.top;
 
     final countdownText = days > 0
         ? '距高考 $days 天'
@@ -122,54 +206,60 @@ class _TopBar extends StatelessWidget {
             : '高考已过 ${-days} 天';
 
     return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.only(top: statusBarHeight),
       decoration: BoxDecoration(
         color: theme.bgColorContainer,
         border: Border(bottom: BorderSide(color: theme.componentStrokeColor, width: 0.5)),
       ),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 30,
-            height: 30,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: theme.componentStrokeColor, width: 0.5),
-            ),
-            child: Image.asset('assets/app_icon_plain.png', fit: BoxFit.cover),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-          ),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: theme.brandLightColor,
-              borderRadius: BorderRadius.circular(theme.radiusRound),
-            ),
-            child: Text(
-              countdownText,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: theme.brandNormalColor,
+      child: SizedBox(
+        height: 44,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 26,
+                height: 26,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: theme.componentStrokeColor, width: 0.5),
+                ),
+                child: Image.asset('assets/app_icon_plain.png', fit: BoxFit.cover),
               ),
-            ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: theme.brandLightColor,
+                  borderRadius: BorderRadius.circular(theme.radiusRound),
+                ),
+                child: Text(
+                  countdownText,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: theme.brandNormalColor,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 2),
+              IconButton(
+                onPressed: appStore.toggleTheme,
+                tooltip: appStore.isDark ? '切换到浅色模式' : '切换到深色模式',
+                icon: Icon(appStore.isDark ? TIcons.sunny : TIcons.moon, size: 18),
+                color: theme.textColorSecondary,
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
           ),
-          const SizedBox(width: 4),
-          IconButton(
-            onPressed: appStore.toggleTheme,
-            tooltip: appStore.isDark ? '切换到浅色模式' : '切换到深色模式',
-            icon: Icon(appStore.isDark ? TIcons.sunny : TIcons.moon, size: 20),
-            color: theme.textColorSecondary,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -218,7 +308,7 @@ class _ConnectionNotice extends StatelessWidget {
     return Container(
       width: double.infinity,
       color: background,
-      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+      padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
       child: Row(
         children: <Widget>[
           if (status == ConnectionStatus.connecting)

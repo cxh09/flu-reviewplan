@@ -6,16 +6,18 @@ import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../data/plan_data.dart';
-import '../models/todo.dart';
+import '../models/plaza_item.dart';
 import '../stores/plan_store.dart';
-import '../utils/app_globals.dart';
+import '../stores/plaza_store.dart';
 import '../utils/app_tabs.dart';
 import '../utils/date_utils.dart';
+import '../utils/responsive.dart';
 import '../widgets/app_ui.dart';
+import '../widgets/plaza_panel_view.dart';
 import '../widgets/plan_block_view.dart';
 import '../widgets/schedule_detail_sheet.dart';
 import '../widgets/schedule_layout.dart';
-import '../widgets/todo_panel_view.dart';
+import '../widgets/share_sheet.dart';
 
 /// 日程表（对应网页版 `views/ScheduleView.vue`）：
 /// 纵向连续日期、横向 06:00 ~ 24:00 时间轴，长按拖动排班 / 改时间 / 改时长。
@@ -42,7 +44,6 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
 
   final GlobalKey _pageKey = GlobalKey();
   final GlobalKey _gridKey = GlobalKey();
-  final GlobalKey _panelKey = GlobalKey();
   final GlobalKey _unscheduleKey = GlobalKey();
 
   final ScrollController _vController = ScrollController();
@@ -80,6 +81,7 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
   String? _dragId;
   String? _dragTitle;
   String? _dragCategory;
+  PlazaItem? _dragItem;
   Offset _dragStart = Offset.zero;
 
   /// 精确到 15 分钟的落点时间（高亮只用到整点，落下时才需要精确值）
@@ -96,7 +98,7 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
   double _autoScrollDx = 0;
   double _autoScrollDy = 0;
 
-  bool _todoPanelOpen = false;
+  bool _plazaPanelOpen = false;
 
   // ---------- 缓存 ----------
 
@@ -280,35 +282,6 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
     return _days[index];
   }
 
-  /// 保证目标日期已经在渲染范围内，必要时向对应方向补齐
-  Future<void> _ensureDateRendered(String date) async {
-    if (_days.contains(date)) return;
-
-    final first = _days.first;
-    final last = _days.last;
-
-    if (date.compareTo(first) < 0) {
-      setState(() {
-        _days = <String>[...dateRange(date, diffDays(date, first)), ..._days];
-      });
-    } else {
-      setState(() {
-        _days = <String>[..._days, ...dateRange(addDays(last, 1), diffDays(last, date))];
-      });
-    }
-    await WidgetsBinding.instance.endOfFrame;
-  }
-
-  Future<void> _scrollToDate(String date) async {
-    await _ensureDateRendered(date);
-    if (!mounted || !_vController.hasClients) return;
-    await _vController.animateTo(
-      clampDouble(_offsetOfDate(date), 0, _vController.position.maxScrollExtent),
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
   // ---------- 横向滚动 ----------
 
   double get _maxHOffset =>
@@ -369,7 +342,8 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
     final gridRect = _rectOf(_gridKey);
     if (gridRect == null || !gridRect.contains(global)) return null;
 
-    final localX = global.dx - gridRect.left + _hOffset;
+    // 时间轴从日期列右侧才开始，gridRect.left 是日期列左边缘，需减去 dateWidth
+    final localX = global.dx - gridRect.left - ScheduleMetrics.dateWidth + _hOffset;
     final rawHour = kFirstHour + localX / ScheduleMetrics.hourWidth;
     final snapped = (rawHour * 60 / ScheduleMetrics.snapMinutes).round() *
         ScheduleMetrics.snapMinutes /
@@ -386,12 +360,10 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
     return DropTarget(date: date, startHour: startHour);
   }
 
-  /// 落点是否在「退回待办」的两个区域上：底部取消条，或已展开的待办面板
+  /// 落点是否在「取消排班」条上（拖计划过去 = 删除该计划）
   bool _isOverUnschedule(Offset global) {
     final bar = _rectOf(_unscheduleKey);
-    if (bar != null && bar.contains(global)) return true;
-    final panel = _rectOf(_panelKey);
-    return panel != null && panel.contains(global);
+    return bar != null && bar.contains(global);
   }
 
   // ---------- 拖拽 ----------
@@ -402,6 +374,7 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
     required String title,
     required String category,
     required Offset start,
+    PlazaItem? plazaItem,
     double? fromStartHour,
     int? fromDuration,
   }) {
@@ -413,6 +386,7 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
     _dragId = id;
     _dragTitle = title;
     _dragCategory = category;
+    _dragItem = plazaItem;
     _dragStart = start;
     _dropStartHour = kFirstHour.toDouble();
     if (fromStartHour != null) _resizeStartHour = fromStartHour;
@@ -471,7 +445,7 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
 
     if (kind == DragKind.planMove && hovering) {
       HapticFeedback.lightImpact();
-      _planStore.unschedulePlan(id);
+      _planStore.removePlan(id);
       return;
     }
 
@@ -481,8 +455,19 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
     HapticFeedback.lightImpact();
     final target = DropTarget(date: cell.date, startHour: _dropStartHour);
     final planStore = _planStore;
-    if (kind == DragKind.todo) {
-      planStore.scheduleFromTodo(id, target.date, target.startHour);
+    if (kind == DragKind.plaza) {
+      final item = _dragItem;
+      if (item == null) return;
+      planStore.scheduleFromPlaza(
+        title: item.title,
+        category: item.category,
+        level: item.level,
+        duration: item.duration,
+        desc: item.desc,
+        link: item.link,
+        date: target.date,
+        startHour: target.startHour,
+      );
     } else {
       planStore.movePlan(id, target.date, target.startHour);
     }
@@ -494,6 +479,7 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
     _dragId = null;
     _dragTitle = null;
     _dragCategory = null;
+    _dragItem = null;
     _draggingId.value = null;
     _dragPosition.value = null;
     _dropCell.value = null;
@@ -632,41 +618,29 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
     HapticFeedback.selectionClick();
   }
 
-  // ---------- 添加日程（仅从待办清单排班） ----------
-
-  /// 待办一键排班：直接排到今天 19:00，之后可在详情里改时间
-  Future<void> _quickSchedule(Todo todo) async {
-    final planStore = _planStore;
-    final targetDate = todayKey();
-    final created = planStore.scheduleFromTodo(todo.id, targetDate, 19);
-
-    // 只读模式下 store 会拒绝写入并给出提示，这里不再滚动也不再报「已添加」
-    if (created == null) return;
-
-    // 目标日期可能还没被渲染出来，补齐后滚动过去，保证能看到结果
-    if (!mounted) return;
-    await _scrollToDate(targetDate);
-    if (mounted) showSuccessToast('已添加到排版计划');
-  }
-
   // ---------- 界面 ----------
 
   @override
   Widget build(BuildContext context) {
     final theme = context.tTheme;
     final planStore = context.watch<PlanStore>();
+    final plazaStore = context.watch<PlazaStore>();
     final media = MediaQuery.of(context);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         _availableWidth = constraints.maxWidth - ScheduleMetrics.dateWidth;
+        // 横屏 / 矮屏时压缩底部广场面板高度，避免把时间轴挤到看不见。
+        final panelH = constraints.maxHeight < 520
+            ? (constraints.maxHeight * 0.55).clamp(180.0, panelHeight)
+            : panelHeight;
 
         return Stack(
           key: _pageKey,
           children: <Widget>[
             Column(
               children: <Widget>[
-                _buildToolbar(theme, planStore),
+                _buildToolbar(theme),
                 _buildHeader(theme),
                 Expanded(child: _buildGrid(theme, planStore)),
               ],
@@ -707,35 +681,42 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
                   : const SizedBox.shrink(),
             ),
 
-            // 待办清单面板
+            // 日程广场面板
             AnimatedPositioned(
-              key: _panelKey,
-              // 与各弹层共用同一套动效参数（见 AppMotion）
               duration: AppMotion.sheet,
               curve: AppMotion.sheetCurve,
               left: 0,
               right: 0,
-              height: panelHeight + media.padding.bottom,
-              bottom: _todoPanelOpen ? 0 : -panelHeight - media.padding.bottom,
-              child: TodoPanelView(
-                todos: planStore.todos,
-                draggingId: _draggingId,
-                onClose: () => setState(() => _todoPanelOpen = false),
-                onScheduleTodo: _quickSchedule,
-                onRemoveTodo: (todo) => planStore.removeTodo(todo.id),
-                onGoPlaza: () {
-                  setState(() => _todoPanelOpen = false);
-                  goToTab(AppTab.plaza);
-                },
-                onDragStart: (todo, position) => _beginDrag(
-                  kind: DragKind.todo,
-                  id: todo.id,
-                  title: todo.title,
-                  category: todo.category,
-                  start: position,
+              height: panelH + media.padding.bottom,
+              bottom: _plazaPanelOpen ? 0 : -panelH - media.padding.bottom,
+              // 平板 / 横屏下与弹层一致：左右留白 + 限宽居中，不铺满。
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: context.sheetSideMargin),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: context.sheetMaxWidth),
+                    child: PlazaPanelView(
+                      collections: plazaStore.collections,
+                      draggingId: _draggingId,
+                      onClose: () => setState(() => _plazaPanelOpen = false),
+                      onGoPlaza: () {
+                        setState(() => _plazaPanelOpen = false);
+                        goToTab(AppTab.plaza);
+                      },
+                      onDragStart: (item, position) => _beginDrag(
+                        kind: DragKind.plaza,
+                        id: item.id,
+                        title: item.title,
+                        category: item.category,
+                        start: position,
+                        plazaItem: item,
+                      ),
+                      onDragUpdate: _onDragMove,
+                      onDragEnd: _endDrag,
+                    ),
+                  ),
                 ),
-                onDragUpdate: _onDragMove,
-                onDragEnd: _endDrag,
               ),
             ),
           ],
@@ -744,7 +725,7 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
     );
   }
 
-  Widget _buildToolbar(TThemeData theme, PlanStore planStore) {
+  Widget _buildToolbar(TThemeData theme) {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       decoration: BoxDecoration(
@@ -766,11 +747,20 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
           const Spacer(),
           TButton(
             size: TButtonSize.extraSmall,
+            variant: TButtonVariant.outline,
+            colorScheme: TButtonColorScheme.defaultTheme,
+            icon: const Icon(TIcons.share, size: 15),
+            child: const Text('分享'),
+            onPressed: () => showShareSheet(context),
+          ),
+          const SizedBox(width: 8),
+          TButton(
+            size: TButtonSize.extraSmall,
             variant: TButtonVariant.fill,
             colorScheme: TButtonColorScheme.primary,
-            icon: const Icon(TIcons.queue, size: 16),
-            child: Text('待办 ${planStore.todoCount}'),
-            onPressed: () => setState(() => _todoPanelOpen = !_todoPanelOpen),
+            icon: const Icon(TIcons.add, size: 16),
+            child: const Text('添加日程'),
+            onPressed: () => setState(() => _plazaPanelOpen = !_plazaPanelOpen),
           ),
         ],
       ),
@@ -804,21 +794,30 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
                 height: 34,
                 child: Transform.translate(
                   offset: Offset(-_hOffset, 0),
-                  child: Row(
-                    children: kTimelineHours.map((hour) {
-                      return SizedBox(
-                        width: ScheduleMetrics.hourWidth,
-                        child: Center(
-                          child: Text(
-                            formatHour(hour),
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: theme.textColorSecondary,
+                  // 时间轴内容宽（contentWidth）大于视口：用 OverflowBox 让子项按自身宽度布局，
+                  // 外层 ClipRect 裁切、_hOffset 平移（UnconstrainedBox 仍会报溢出）。
+                  child: OverflowBox(
+                    maxWidth: ScheduleMetrics.contentWidth,
+                    alignment: Alignment.centerLeft,
+                    child: SizedBox(
+                      width: ScheduleMetrics.contentWidth,
+                      child: Row(
+                        children: kTimelineHours.map((hour) {
+                          return SizedBox(
+                            width: ScheduleMetrics.hourWidth,
+                            child: Center(
+                              child: Text(
+                                formatHour(hour),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: theme.textColorSecondary,
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                          );
+                        }).toList(),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -865,10 +864,13 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
             child: ClipRect(
               child: Transform.translate(
                 offset: Offset(-_hOffset, 0),
-                child: SizedBox(
-                  width: ScheduleMetrics.contentWidth,
-                  height: layout.height,
-                  child: Stack(
+                child: OverflowBox(
+                  maxWidth: ScheduleMetrics.contentWidth,
+                  alignment: Alignment.centerLeft,
+                  child: SizedBox(
+                    width: ScheduleMetrics.contentWidth,
+                    height: layout.height,
+                    child: Stack(
                     children: <Widget>[
                       // 只有落点格子变化时才重建这一行的格子
                       ValueListenableBuilder<DropCell?>(
@@ -908,6 +910,7 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
               ),
             ),
           ),
+        ),
         ],
       ),
     );
@@ -928,27 +931,31 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              Text(
-                weekdayShortCN(date),
-                style: TextStyle(fontSize: 11, color: theme.textColorPlaceholder),
-              ),
-              if (today) ...<Widget>[
-                const SizedBox(width: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: theme.brandNormalColor,
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  child: const Text(
-                    '今天',
-                    style: TextStyle(fontSize: 9, color: Colors.white),
-                  ),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              children: <Widget>[
+                Text(
+                  weekdayShortCN(date),
+                  style: TextStyle(fontSize: 11, color: theme.textColorPlaceholder),
                 ),
+                if (today) ...<Widget>[
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: theme.brandNormalColor,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: const Text(
+                      '今天',
+                      style: TextStyle(fontSize: 9, color: Colors.white),
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
           const SizedBox(height: 2),
           Text(
@@ -970,7 +977,7 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
     final isOver = active != null && active.containsHour(hour.toDouble());
 
     return GestureDetector(
-      onTap: () => setState(() => _todoPanelOpen = true),
+      onTap: () => setState(() => _plazaPanelOpen = true),
       child: Container(
         width: ScheduleMetrics.hourWidth,
         decoration: BoxDecoration(
@@ -1059,7 +1066,7 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
               ),
               const SizedBox(width: 6),
               Text(
-                over ? '松手退回待办清单' : '拖到这里取消排班',
+                over ? '松手取消排班' : '拖到这里取消排班',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: over ? FontWeight.w600 : FontWeight.w400,

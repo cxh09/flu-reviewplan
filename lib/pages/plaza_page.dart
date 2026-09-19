@@ -7,10 +7,10 @@ import '../data/plaza_data.dart';
 import '../models/collection.dart';
 import '../models/plaza_item.dart';
 import '../stores/connection.dart';
-import '../stores/plan_store.dart';
 import '../stores/plaza_store.dart';
 import '../utils/app_globals.dart';
 import '../utils/app_tabs.dart';
+import '../utils/responsive.dart';
 import '../widgets/app_ui.dart';
 import '../widgets/collection_dialog.dart';
 import '../widgets/plaza_item_dialog.dart';
@@ -79,47 +79,6 @@ class _PlazaPageState extends State<PlazaPage> {
     return collection.items.take(previewCount).toList();
   }
 
-  bool _isInTodo(PlanStore planStore, PlazaItem item) =>
-      // 传科目，与 addTodo 的「标题 + 科目」去重口径保持一致
-      planStore.hasTodo(item.title, item.category);
-
-  /// @returns 是否真的新增了一条
-  bool _addItemSilently(PlanStore planStore, PlazaItem item) {
-    final existed = _isInTodo(planStore, item);
-    final todo = planStore.addTodo(
-      title: item.title,
-      category: item.category,
-      level: item.level,
-      duration: item.duration,
-      desc: item.desc,
-      link: item.link,
-      source: 'plaza',
-    );
-    // 只读模式下 addTodo 返回 null，此时 store 已经弹过提示
-    return todo != null && !existed;
-  }
-
-  void _addItemToTodo(PlanStore planStore, PlazaItem item) {
-    if (!_addItemSilently(planStore, item)) {
-      showInfoToast('「${item.title}」已经在待办清单里了');
-      return;
-    }
-    showSuccessToast('「${item.title}」已加入待办清单');
-  }
-
-  void _addCollectionToTodo(PlanStore planStore, Collection collection) {
-    final pending = collection.items
-        .where((item) => !_isInTodo(planStore, item))
-        .toList();
-    if (pending.isEmpty) {
-      showInfoToast('「${collection.name}」里的日程都已在待办清单中');
-      return;
-    }
-    // 批量加入只弹一条汇总，避免每条各弹一次刷屏
-    final added = pending.where((item) => _addItemSilently(planStore, item)).length;
-    showSuccessToast('已加入 $added 条日程到待办清单');
-  }
-
   Future<void> _openCollectionSheet(
     PlazaStore plazaStore, {
     Collection? collection,
@@ -135,7 +94,7 @@ class _PlazaPageState extends State<PlazaPage> {
         color: result.color,
       );
       if (created == null) return;
-      showSuccessToast('合集「${created.name}」已创建');
+      showSuccessToast('合集已创建');
     } else {
       // 只读模式下 store 会拒绝写入并给出提示，这里不再报「已更新」
       if (plazaStore.updateCollection(
@@ -157,14 +116,14 @@ class _PlazaPageState extends State<PlazaPage> {
       context,
       title: '删除系列合集',
       content:
-          '确认删除「${collection.name}」？里面的 ${collection.items.length} 条日程会一并删除，已经加入待办清单的日程不受影响。',
+          '确认删除「${collection.name}」？里面的 ${collection.items.length} 条日程会一并删除，已经排到日程表的日程不受影响。',
       confirmText: '删除',
       danger: true,
     );
     if (!confirmed || !mounted) return;
 
     plazaStore.removeCollection(collection.id);
-    if (isOnline) showSuccessToast('合集「${collection.name}」已删除');
+    if (isOnline) showSuccessToast('合集已删除');
   }
 
   Future<void> _openItemSheet(
@@ -187,7 +146,7 @@ class _PlazaPageState extends State<PlazaPage> {
       }
       // 新加的日程在末尾，展开合集免得看起来「没加上」
       setState(() => _expandedIds.add(collectionId));
-      showSuccessToast('「${result.title}」已加入合集');
+      showSuccessToast('已加入合集');
     } else {
       if (plazaStore.updateItem(
             collectionId,
@@ -224,16 +183,16 @@ class _PlazaPageState extends State<PlazaPage> {
   @override
   Widget build(BuildContext context) {
     final theme = context.tTheme;
-    final planStore = context.watch<PlanStore>();
     final plazaStore = context.watch<PlazaStore>();
     final collections = _visibleCollections(plazaStore);
     final searching = _trimmedKeyword.isNotEmpty;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+    return AdaptivePage(
+      child: ListView(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
       children: <Widget>[
         AppCard(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -243,7 +202,7 @@ class _PlazaPageState extends State<PlazaPage> {
               ),
               const SizedBox(height: 6),
               Text(
-                '每个系列合集下面直接列出它的日程：可以自己新建合集、往里加日程，也可以一键把整个合集送进待办清单。',
+                '每个系列合集下面直接列出它的日程：在这里新建合集、往里加日程，再回到日程表点“＋”把它们拖到时间线上排班。',
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.75,
@@ -278,17 +237,51 @@ class _PlazaPageState extends State<PlazaPage> {
                 ],
               ),
               const SizedBox(height: 14),
-              TInput(
-                controller: _searchController,
-                hintText: '搜索合集名称或日程内容',
-                prefix: Icon(
-                  TIcons.search,
-                  size: 18,
-                  color: theme.textColorPlaceholder,
+              // 搜索框：图标与输入文字放在居中的 Row 里，保证两者垂直居中对齐。
+              Container(
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: theme.bgColorSecondaryContainer,
+                  borderRadius: BorderRadius.circular(theme.radiusDefault),
+                  border: Border.all(
+                    color: theme.componentStrokeColor,
+                    width: 0.5,
+                  ),
                 ),
-                suffix: _keyword.isEmpty
-                    ? null
-                    : GestureDetector(
+                child: Row(
+                  children: <Widget>[
+                    Icon(
+                      TIcons.search,
+                      size: 18,
+                      color: theme.textColorPlaceholder,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        textAlignVertical: TextAlignVertical.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: theme.textColorPrimary,
+                        ),
+                        onChanged: (value) => setState(() => _keyword = value),
+                        decoration: InputDecoration(
+                          isCollapsed: true,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          hintText: '搜索合集名称或日程内容',
+                          hintStyle: TextStyle(
+                            fontSize: 14,
+                            color: theme.textColorPlaceholder,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_keyword.isNotEmpty) ...<Widget>[
+                      const SizedBox(width: 6),
+                      GestureDetector(
                         onTap: () {
                           _searchController.clear();
                           setState(() => _keyword = '');
@@ -299,7 +292,9 @@ class _PlazaPageState extends State<PlazaPage> {
                           color: theme.textColorPlaceholder,
                         ),
                       ),
-                onChanged: (value) => setState(() => _keyword = value),
+                    ],
+                  ],
+                ),
               ),
               const SizedBox(height: 10),
               Wrap(
@@ -312,10 +307,6 @@ class _PlazaPageState extends State<PlazaPage> {
                   ),
                   Text(
                     '${plazaStore.itemCount} 条日程',
-                    style: TextStyle(fontSize: 12, color: theme.textColorPlaceholder),
-                  ),
-                  Text(
-                    '待办清单 ${planStore.todoCount} 项',
                     style: TextStyle(fontSize: 12, color: theme.textColorPlaceholder),
                   ),
                 ],
@@ -339,7 +330,6 @@ class _PlazaPageState extends State<PlazaPage> {
               items: _visibleItems(collection),
               expanded: _expandedIds.contains(collection.id),
               forceExpanded: searching,
-              planStore: planStore,
               onToggleExpand: () {
                 setState(() {
                   if (!_expandedIds.remove(collection.id)) {
@@ -347,13 +337,11 @@ class _PlazaPageState extends State<PlazaPage> {
                   }
                 });
               },
-              onAddCollectionToTodo: () => _addCollectionToTodo(planStore, collection),
               onCreateItem: () =>
                   _openItemSheet(plazaStore, collectionId: collection.id),
               onEditCollection: () =>
                   _openCollectionSheet(plazaStore, collection: collection),
               onRemoveCollection: () => _removeCollection(plazaStore, collection),
-              onAddItemToTodo: (item) => _addItemToTodo(planStore, item),
               onEditItem: (item) => _openItemSheet(
                 plazaStore,
                 collectionId: collection.id,
@@ -363,6 +351,7 @@ class _PlazaPageState extends State<PlazaPage> {
             ),
           ),
       ],
+      ),
     );
   }
 }
@@ -374,13 +363,10 @@ class _CollectionCard extends StatelessWidget {
     required this.items,
     required this.expanded,
     required this.forceExpanded,
-    required this.planStore,
     required this.onToggleExpand,
-    required this.onAddCollectionToTodo,
     required this.onCreateItem,
     required this.onEditCollection,
     required this.onRemoveCollection,
-    required this.onAddItemToTodo,
     required this.onEditItem,
     required this.onRemoveItem,
   });
@@ -389,13 +375,10 @@ class _CollectionCard extends StatelessWidget {
   final List<PlazaItem> items;
   final bool expanded;
   final bool forceExpanded;
-  final PlanStore planStore;
   final VoidCallback onToggleExpand;
-  final VoidCallback onAddCollectionToTodo;
   final VoidCallback onCreateItem;
   final VoidCallback onEditCollection;
   final VoidCallback onRemoveCollection;
-  final void Function(PlazaItem item) onAddItemToTodo;
   final void Function(PlazaItem item) onEditItem;
   final void Function(PlazaItem item) onRemoveItem;
 
@@ -455,14 +438,6 @@ class _CollectionCard extends StatelessWidget {
               TButton(
                 size: TButtonSize.extraSmall,
                 variant: TButtonVariant.outline,
-                colorScheme: TButtonColorScheme.primary,
-                icon: const Icon(TIcons.star, size: 14),
-                child: const Text('一键加入待办'),
-                onPressed: onAddCollectionToTodo,
-              ),
-              TButton(
-                size: TButtonSize.extraSmall,
-                variant: TButtonVariant.outline,
                 colorScheme: TButtonColorScheme.defaultTheme,
                 icon: const Icon(TIcons.add, size: 14),
                 child: const Text('添加日程'),
@@ -505,8 +480,6 @@ class _CollectionCard extends StatelessWidget {
             ...items.map(
               (item) => _ItemRow(
                 item: item,
-                inTodo: planStore.hasTodo(item.title, item.category),
-                onAddToTodo: () => onAddItemToTodo(item),
                 onEdit: () => onEditItem(item),
                 onRemove: () => onRemoveItem(item),
               ),
@@ -547,15 +520,11 @@ String formatDuration(int minutes) {
 class _ItemRow extends StatelessWidget {
   const _ItemRow({
     required this.item,
-    required this.inTodo,
-    required this.onAddToTodo,
     required this.onEdit,
     required this.onRemove,
   });
 
   final PlazaItem item;
-  final bool inTodo;
-  final VoidCallback onAddToTodo;
   final VoidCallback onEdit;
   final VoidCallback onRemove;
 
@@ -654,28 +623,6 @@ class _ItemRow extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: <Widget>[
-              if (inTodo)
-                TButton(
-                  size: TButtonSize.extraSmall,
-                  variant: TButtonVariant.outline,
-                  colorScheme: TButtonColorScheme.defaultTheme,
-                  icon: Icon(
-                    TIcons.check_circle,
-                    size: 14,
-                    color: theme.successNormalColor,
-                  ),
-                  child: const Text('已在待办'),
-                  onPressed: null,
-                )
-              else
-                TButton(
-                  size: TButtonSize.extraSmall,
-                  variant: TButtonVariant.outline,
-                  colorScheme: TButtonColorScheme.primary,
-                  icon: const Icon(TIcons.add, size: 14),
-                  child: const Text('加入待办'),
-                  onPressed: onAddToTodo,
-                ),
               const Spacer(),
               TButton(
                 size: TButtonSize.extraSmall,

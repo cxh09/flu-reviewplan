@@ -28,8 +28,8 @@ class ScheduleMetrics {
 
 /// 拖拽类型
 enum DragKind {
-  /// 从待办清单拖到时间线上排班
-  todo,
+  /// 从日程广场面板拖到时间线上排班
+  plaza,
 
   /// 拖动日历上的计划块换时间
   planMove,

@@ -75,14 +75,10 @@ class _PlazaItemSheetState extends State<_PlazaItemSheet> {
       showWarningToast('请输入日程标题');
       return;
     }
-    if (title.length > 30) {
-      showWarningToast('标题不要超过 30 个字');
-      return;
-    }
 
     final link = _linkController.text.trim();
     if (!isValidHttpLink(link)) {
-      showWarningToast('看起来不是有效的链接，请检查后重试');
+      showWarningToast('链接无效，请检查后重试');
       return;
     }
 
@@ -108,7 +104,6 @@ class _PlazaItemSheetState extends State<_PlazaItemSheet> {
             child: TInput(
               controller: _titleController,
               hintText: '例如：函数与导数专题刷题',
-              maxLength: 30,
             ),
           ),
           AppFormField(

@@ -85,10 +85,29 @@ class _ReviewPlanAppState extends State<ReviewPlanApp> {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
+            builder: (context, child) {
+              // 全局 iOS 弹性回弹 + 强制可滚动
+              return ScrollConfiguration(
+                behavior: const _BounceScrollBehavior(),
+                child: child!,
+              );
+            },
             home: const HomeShell(),
           );
         },
       ),
     );
   }
+}
+
+/// 全局滚动行为：强制 BouncingScrollPhysics，让所有列表都有 iOS 回弹感。
+class _BounceScrollBehavior extends ScrollBehavior {
+  const _BounceScrollBehavior();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) =>
+      const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics());
+
+  @override
+  Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) => child;
 }

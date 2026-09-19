@@ -79,6 +79,10 @@ class ApiClient {
         response = await http
             .put(uri, headers: headers, body: jsonEncode(body))
             .timeout(timeout);
+      } else if (method == 'POST') {
+        response = await http
+            .post(uri, headers: headers, body: jsonEncode(body))
+            .timeout(timeout);
       } else {
         response = await http.get(uri, headers: headers).timeout(timeout);
       }
@@ -136,6 +140,22 @@ class ApiClient {
       '/api/data',
       method: 'PUT',
       body: <String, dynamic>{'data': data, 'rev': rev},
+      token: token,
+    );
+  }
+
+  /// 创建分享链接：登记一个日期范围，返回含随机 `code`。
+  static Future<Map<String, dynamic>?> createShare(
+    String baseUrl,
+    String token,
+    String dateStart,
+    String dateEnd,
+  ) {
+    return request(
+      baseUrl,
+      '/api/shares',
+      method: 'POST',
+      body: <String, dynamic>{'dateStart': dateStart, 'dateEnd': dateEnd},
       token: token,
     );
   }

@@ -3,9 +3,10 @@ library;
 
 /// 导出数据的格式版本；导入时用它判断备份是否来自更新的版本。
 ///
-/// v2：导出内容在待办 / 计划之外额外带上了日程广场的系列合集。
+/// v2：导出内容在计划之外额外带上了日程广场的系列合集。
 /// v3：条目带上 updatedAt、快照带上 gaokaoDateUpdatedAt 与删除标记，用于两端按条目合并。
-const int kDataVersion = 3;
+/// v4：取消中间的「待办清单」，日程广场直接排到日程表，快照不再携带 todos。
+const int kDataVersion = 4;
 
 /// 默认高考日期（2027 年高考首日）
 const String kDefaultGaokaoDate = '2027-06-07';

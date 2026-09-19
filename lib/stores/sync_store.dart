@@ -51,7 +51,7 @@ class SyncResult {
 
 /// 云端数据源（对齐网页版 `src/stores/sync.js`）。
 ///
-/// 全在线模式：待办 / 计划 / 高考日期 / 日程广场合集都以服务端为唯一来源，本地不落盘。
+/// 全在线模式：计划 / 高考日期 / 日程广场合集都以服务端为唯一来源，本地不落盘。
 /// - 启动后 [connect] 拉取云端快照填充；在线期间每 3 秒轮询版本号，
 ///   云端被其它设备改动时自动拉取合并（[pollOnce] / [pullRemote]）；
 /// - 连不上时进入只读，并每隔几秒自动重试；
@@ -490,7 +490,7 @@ class SyncStore extends ChangeNotifier {
       _persist();
       notifyListeners();
 
-      showInfoToast('数据已被其它设备修改，已自动合并双方的改动');
+      showInfoToast('数据被其它设备改过，已自动合并双方改动');
       return SyncResult(ok: true, rev: _rev, merged: true);
     } catch (error) {
       // 合并期间又有别的设备提交，再合一次
@@ -500,7 +500,7 @@ class SyncStore extends ChangeNotifier {
 
       // 实在合不上：退回「以云端为准」，至少保证两端一致
       final pulled = await connect();
-      if (pulled.ok) showWarningToast('数据已被其它设备修改，已同步为云端最新版本');
+      if (pulled.ok) showWarningToast('数据冲突，已同步为云端最新');
       return SyncResult(ok: false, conflict: true, error: '$error');
     }
   }

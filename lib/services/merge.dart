@@ -73,7 +73,7 @@ List<Map<String, dynamic>> mergeTombstones(
       .toList();
 }
 
-/// 合并一组按 id 唯一的条目（待办 / 计划 / 合集 / 合集里的日程通用）。
+/// 合并一组按 id 唯一的条目（计划 / 合集 / 合集里的日程通用）。
 /// 删除时间晚于最后一次修改的条目会被真正丢弃。
 List<Map<String, dynamic>> mergeEntities(
   Object? localList,
@@ -155,7 +155,6 @@ Map<String, dynamic> mergeSnapshots(
 
   return <String, dynamic>{
     ..._mergeGaokaoDate(local, remote),
-    'todos': mergeEntities(local['todos'], remote['todos'], tombstoneAt),
     'plans': mergeEntities(local['plans'], remote['plans'], tombstoneAt),
     'collections': _mergeCollections(local['collections'], remote['collections'], tombstoneAt),
     'deleted': deleted,

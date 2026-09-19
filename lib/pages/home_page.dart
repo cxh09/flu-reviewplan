@@ -7,6 +7,7 @@ import '../models/plan.dart';
 import '../stores/plan_store.dart';
 import '../utils/app_tabs.dart';
 import '../utils/date_utils.dart';
+import '../utils/responsive.dart';
 import '../widgets/app_ui.dart';
 
 /// 首页（对应网页版 `views/HomeView.vue`）：
@@ -18,15 +19,17 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final planStore = context.watch<PlanStore>();
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-      children: <Widget>[
-        _CountdownCard(planStore: planStore),
-        const SizedBox(height: 14),
-        _StatGrid(planStore: planStore),
-        const SizedBox(height: 14),
-        _UpcomingPlansCard(planStore: planStore),
-      ],
+    return AdaptivePage(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+        children: <Widget>[
+          _CountdownCard(planStore: planStore),
+          const SizedBox(height: 10),
+          _StatGrid(planStore: planStore),
+          const SizedBox(height: 10),
+          _UpcomingPlansCard(planStore: planStore),
+        ],
+      ),
     );
   }
 }
@@ -63,7 +66,7 @@ class _CountdownCard extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(theme.radiusExtraLarge),
         border: Border.all(color: theme.componentStrokeColor, width: 0.5),
@@ -149,22 +152,23 @@ class _StatGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.tTheme;
     final items = <({String title, num value, String unit})>[
-      (title: '待办清单', value: planStore.todoCount, unit: '项'),
+      (title: '未完成', value: planStore.planCount - planStore.donePlanCount, unit: '项'),
       (title: '已排计划', value: planStore.planCount, unit: '项'),
       (title: '已完成', value: planStore.donePlanCount, unit: '项'),
       (title: '本周完成率', value: planStore.weekStats.rate, unit: '%'),
     ];
 
     return GridView.count(
-      crossAxisCount: 2,
+      // 窄屏 2 列，宽屏（平板 / 横屏）4 列一排排开。
+      crossAxisCount: context.isCompact ? 2 : 4,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 8,
       childAspectRatio: 1.9,
       children: items.map((item) {
         return AppCard(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -213,7 +217,7 @@ class _UpcomingPlansCard extends StatelessWidget {
     final groups = planStore.upcomingGroups;
 
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -246,7 +250,7 @@ class _UpcomingPlansCard extends StatelessWidget {
           const SizedBox(height: 8),
           if (groups.isEmpty)
             EmptyHint(
-              text: '还没有排版计划\n先去日程广场挑几条日程加入待办清单，再到日程表拖到时间线上排班',
+              text: '还没有排版计划\n点日程表右上角的「+」打开日程广场，挑几条日程直接排到时间线上',
               actionText: '去日程广场',
               onAction: () => goToTab(AppTab.plaza),
             )
@@ -269,7 +273,7 @@ class _DayGroup extends StatelessWidget {
     final today = isToday(group.date);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -320,8 +324,8 @@ class _PlanRow extends StatelessWidget {
     final color = categoryColor(plan.category);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: theme.bgColorSecondaryContainer,
         borderRadius: BorderRadius.circular(theme.radiusDefault),
