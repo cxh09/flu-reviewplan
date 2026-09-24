@@ -69,9 +69,15 @@ class _HomeShellState extends State<HomeShell> {
     // 平板 / 横屏大屏（宽度达到阈值）改用左侧导航栏，把纵向空间留给内容。
     final useSideNav = context.useSideNav;
 
+    // 横屏（侧边导航）下去掉顶部标题栏，把纵向空间留给内容；
+    // 主题切换挪到侧边栏底部，状态栏高度用 SizedBox 补回。
+    final topInset = MediaQuery.of(context).padding.top;
     final contentColumn = Column(
       children: <Widget>[
-        _TopBar(title: _titles[_index]),
+        if (useSideNav)
+          SizedBox(height: topInset)
+        else
+          _TopBar(title: _titles[_index]),
         if (connection.status != ConnectionStatus.online)
           _ConnectionNotice(
             status: connection.status,
@@ -132,6 +138,7 @@ class _SideNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.tTheme;
+    final appStore = context.watch<AppStore>();
     final topInset = MediaQuery.of(context).padding.top;
 
     return Material(
@@ -180,6 +187,17 @@ class _SideNav extends StatelessWidget {
                 ),
               )
               .toList(),
+          // 顶部标题栏在横屏下被去掉，主题切换按钮挪到这里
+          trailing: Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: IconButton(
+              onPressed: appStore.toggleTheme,
+              tooltip: appStore.isDark ? '切换到浅色模式' : '切换到深色模式',
+              icon: Icon(appStore.isDark ? TIcons.sunny : TIcons.moon, size: 18),
+              color: theme.textColorSecondary,
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
         ),
       ),
     );

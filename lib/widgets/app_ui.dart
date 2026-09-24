@@ -279,6 +279,10 @@ class _SheetFrameState extends State<_SheetFrame>
     final available = media.size.height * widget.maxHeightRatio - insets;
     final maxHeight = available < 240 ? 240.0 : available;
 
+    // 横屏下面板贴右显示，标题栏（标题 + 关闭）与窄屏重复，去掉只留占位；
+    // 关闭仍可通过点拖拽条、下拉甩掉或点遮罩完成。
+    final landscape = media.size.width > media.size.height;
+
     return Padding(
       padding: EdgeInsets.only(bottom: insets),
       child: Transform.translate(
@@ -318,34 +322,38 @@ class _SheetFrameState extends State<_SheetFrame>
                   ),
                 ),
               ),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onVerticalDragUpdate: _handleDragUpdate,
-                onVerticalDragEnd: _handleDragEnd,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 2, 8, 6),
-                  child: Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          widget.title,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
+              if (landscape)
+                const SizedBox(height: 10)
+              else ...<Widget>[
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onVerticalDragUpdate: _handleDragUpdate,
+                  onVerticalDragEnd: _handleDragEnd,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 2, 8, 6),
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            widget.title,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
-                      ),
-                      IconButton(
-                        onPressed: _close,
-                        icon: const Icon(TIcons.close, size: 20),
-                        tooltip: '关闭',
-                        color: theme.textColorPlaceholder,
-                      ),
-                    ],
+                        IconButton(
+                          onPressed: _close,
+                          icon: const Icon(TIcons.close, size: 20),
+                          tooltip: '关闭',
+                          color: theme.textColorPlaceholder,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const Divider(height: 1),
+                const Divider(height: 1),
+              ],
               Flexible(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),

@@ -140,6 +140,33 @@ Map<String, dynamic> _mergeGaokaoDate(
       : <String, dynamic>{'gaokaoDate': remoteDate, 'gaokaoDateUpdatedAt': remoteAt};
 }
 
+Map<String, dynamic>? _pickProfile(Object? raw) {
+  if (raw is! Map) return null;
+  final p = raw.cast<String, dynamic>();
+  return <String, dynamic>{
+    'name': '${p['name'] ?? ''}',
+    'avatar': '${p['avatar'] ?? ''}',
+    'updatedAt': toNumber(p['updatedAt'], 0).round(),
+  };
+}
+
+/// 作者资料是个标量对象，同样按 updatedAt 取新的；一方没有时用另一方
+Map<String, dynamic> _mergeProfile(
+  Map<String, dynamic> local,
+  Map<String, dynamic> remote,
+) {
+  final localProfile = _pickProfile(local['profile']);
+  final remoteProfile = _pickProfile(remote['profile']);
+
+  if (remoteProfile == null) {
+    return localProfile ?? <String, dynamic>{'name': '', 'avatar': '', 'updatedAt': 0};
+  }
+  if (localProfile == null) return remoteProfile;
+  return localProfile['updatedAt'] > remoteProfile['updatedAt']
+      ? localProfile
+      : remoteProfile;
+}
+
 /// 合并本地与云端两份快照。
 ///
 /// [local] / [remote] 都是快照 JSON；[nowMs] 用于回收过期删除标记。
@@ -155,6 +182,7 @@ Map<String, dynamic> mergeSnapshots(
 
   return <String, dynamic>{
     ..._mergeGaokaoDate(local, remote),
+    'profile': _mergeProfile(local, remote),
     'plans': mergeEntities(local['plans'], remote['plans'], tombstoneAt),
     'collections': _mergeCollections(local['collections'], remote['collections'], tombstoneAt),
     'deleted': deleted,

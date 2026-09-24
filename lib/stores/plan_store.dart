@@ -53,6 +53,11 @@ class PlanStore extends ChangeNotifier {
   int _gaokaoDateUpdatedAt = 0;
   final List<Plan> _plans = <Plan>[];
 
+  // 分享署名用的作者资料：头像为客户端压缩后的 dataURL；对齐网页版 plan.js 的 profile
+  String _profileName = '';
+  String _profileAvatar = '';
+  int _profileUpdatedAt = 0;
+
   /// 每次数据变化 +1。
   /// 因为列表是原地修改的（引用不会变），外部想按"数据有没有变"做缓存，
   /// 只能靠这个版本号来判断。
@@ -67,6 +72,9 @@ class PlanStore extends ChangeNotifier {
 
   String get gaokaoDate => _gaokaoDate;
   int get gaokaoDateUpdatedAt => _gaokaoDateUpdatedAt;
+
+  String get profileName => _profileName;
+  String get profileAvatar => _profileAvatar;
 
   /// 全部计划（只读视图，不做拷贝）
   List<Plan> get plans => UnmodifiableListView<Plan>(_plans);
@@ -356,11 +364,28 @@ class PlanStore extends ChangeNotifier {
     _touch();
   }
 
+  /// 更新作者资料（用户名 / 头像）；[avatar] 传 null 表示不改动当前头像。
+  void setProfile({String? name, String? avatar}) {
+    if (!ensureWritable()) return;
+    if (name != null) {
+      final trimmed = name.trim();
+      _profileName = trimmed.length > 24 ? trimmed.substring(0, 24) : trimmed;
+    }
+    if (avatar != null && avatar.isNotEmpty) _profileAvatar = avatar;
+    _profileUpdatedAt = DateTime.now().millisecondsSinceEpoch;
+    _touch();
+  }
+
   /// 当前数据打包成同步用的快照片段（对齐 sync store 的 `buildPayload`）
   Map<String, dynamic> buildPayload() => <String, dynamic>{
         'gaokaoDate': _gaokaoDate,
         'gaokaoDateUpdatedAt': _gaokaoDateUpdatedAt,
         'plans': _plans.map((plan) => plan.toJson()).toList(),
+        'profile': <String, dynamic>{
+          'name': _profileName,
+          'avatar': _profileAvatar,
+          'updatedAt': _profileUpdatedAt,
+        },
       };
 
   /// 导出（含版本号与删除标记）
@@ -390,6 +415,15 @@ class PlanStore extends ChangeNotifier {
       _gaokaoDateUpdatedAt = toInt(data['gaokaoDateUpdatedAt'], 0);
     }
     if (data['deleted'] is List) TombstoneService.setTombstones(data['deleted']);
+
+    // 资料是随快照同步的标量对象，缺字段时按空处理，不会写进脏数据
+    final rawProfile = data['profile'];
+    if (rawProfile is Map) {
+      final p = rawProfile.cast<String, dynamic>();
+      _profileName = '${p['name'] ?? ''}';
+      _profileAvatar = '${p['avatar'] ?? ''}';
+      _profileUpdatedAt = toInt(p['updatedAt'], 0);
+    }
 
     _rebuildDateIndex();
     _touch();

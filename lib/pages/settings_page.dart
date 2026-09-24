@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
@@ -24,6 +28,11 @@ class _SettingsPageState extends State<SettingsPage> {
   late final TextEditingController _serverController;
   late final TextEditingController _tokenController;
 
+  /// 个人资料（分享署名）：用户名输入 + 待保存的头像 dataURL 及其解码字节
+  late final TextEditingController _nameController;
+  String? _avatarDataUrl;
+  Uint8List? _avatarBytes;
+
   /// 当前进行中的操作：test | reconnect，用于按钮 loading
   String _action = '';
 
@@ -33,12 +42,16 @@ class _SettingsPageState extends State<SettingsPage> {
     final syncStore = context.read<SyncStore>();
     _serverController = TextEditingController(text: syncStore.serverUrl);
     _tokenController = TextEditingController(text: syncStore.accessToken);
+    final planStore = context.read<PlanStore>();
+    _nameController = TextEditingController(text: planStore.profileName);
+    _applyAvatar(planStore.profileAvatar.isEmpty ? null : planStore.profileAvatar);
   }
 
   @override
   void dispose() {
     _serverController.dispose();
     _tokenController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
@@ -147,6 +160,56 @@ class _SettingsPageState extends State<SettingsPage> {
     if (isOnline) showSuccessToast('已恢复默认日期');
   }
 
+  // ---------- 个人资料（分享署名） ----------
+
+  /// 把头像 dataURL 存入待保存字段，并解码出预览用的字节
+  void _applyAvatar(String? dataUrl) {
+    _avatarDataUrl = (dataUrl == null || dataUrl.isEmpty) ? null : dataUrl;
+    if (_avatarDataUrl == null || !_avatarDataUrl!.contains(',')) {
+      _avatarBytes = null;
+      return;
+    }
+    try {
+      _avatarBytes = base64Decode(_avatarDataUrl!.substring(_avatarDataUrl!.indexOf(',') + 1));
+    } catch (_) {
+      _avatarBytes = null;
+    }
+  }
+
+  Future<void> _pickAvatar() async {
+    final XFile? file;
+    try {
+      // 用 pickImage 的 maxWidth/maxHeight/imageQuality 原生压缩，避免引入 image 包
+      file = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 320,
+        maxHeight: 320,
+        imageQuality: 80,
+      );
+    } catch (_) {
+      showErrorToast('无法打开相册');
+      return;
+    }
+    if (file == null || !mounted) return;
+
+    final bytes = await file.readAsBytes();
+    final dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+    // 压缩后仍异常大就拒绝，避免快照膨胀
+    if (dataUrl.length > 200 * 1024) {
+      showErrorToast('头像过大，请换一张较小的图片');
+      return;
+    }
+    setState(() => _applyAvatar(dataUrl));
+  }
+
+  void _saveProfile() {
+    context.read<PlanStore>().setProfile(
+          name: _nameController.text,
+          avatar: _avatarDataUrl,
+        );
+    if (isOnline) showSuccessToast('资料已保存');
+  }
+
   String _formatDateTime(int timestamp) {
     if (timestamp <= 0) return '尚未同步';
     final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
@@ -189,6 +252,95 @@ class _SettingsPageState extends State<SettingsPage> {
       child: ListView(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
       children: <Widget>[
+        // ---------- 个人资料 ----------
+        AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const SectionHeader(title: '个人资料'),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  GestureDetector(
+                    onTap: _pickAvatar,
+                    child: Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: theme.bgColorSecondaryContainer,
+                        border: Border.all(color: theme.componentBorderColor),
+                        image: _avatarBytes == null
+                            ? null
+                            : DecorationImage(
+                                image: MemoryImage(_avatarBytes!),
+                                fit: BoxFit.cover,
+                              ),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: _avatarBytes == null
+                          ? Center(
+                              child: Icon(
+                                TIcons.user,
+                                size: 28,
+                                color: theme.textColorPlaceholder,
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        TInput(
+                          controller: _nameController,
+                          hintText: '用户名（用于分享页署名）',
+                          onEditingComplete: _saveProfile,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '分享页顶部会显示“由 用户名 分享”。用户名与头像会随数据同步到各端，离线时无法保存。',
+                          style: TextStyle(
+                            fontSize: 11,
+                            height: 1.6,
+                            color: theme.textColorPlaceholder,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: <Widget>[
+                  TButton(
+                    size: TButtonSize.small,
+                    variant: TButtonVariant.fill,
+                    colorScheme: TButtonColorScheme.primary,
+                    child: const Text('保存资料'),
+                    onPressed: _saveProfile,
+                  ),
+                  TButton(
+                    size: TButtonSize.small,
+                    variant: TButtonVariant.outline,
+                    colorScheme: TButtonColorScheme.defaultTheme,
+                    icon: const Icon(TIcons.image, size: 15),
+                    child: const Text('选择头像'),
+                    onPressed: _pickAvatar,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
         // ---------- 高考设置 ----------
         AppCard(
           child: Column(

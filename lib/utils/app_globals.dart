@@ -7,9 +7,8 @@ final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 /// 挂在应用外壳根节点上的 key。
 ///
 /// store、service 这类非 UI 层弹提示时拿不到 Widget 的 context；
-/// 而 TToast 内部是 `Overlay.maybeOf(context)`，必须拿到 Overlay 子树里
-/// 的 context（Navigator 自身的 context 在 Overlay 之上，取不到），
-/// 所以这里指向外壳根节点，它在路由内容里、位于 Overlay 之下。
+/// 而 TMessage 内部是 `Overlay.of(context)`，需要一个能找到 Overlay 的
+/// context，这里指向外壳根节点，它在路由内容里、位于 Overlay 之下。
 final GlobalKey appRootKey = GlobalKey();
 
 BuildContext? get _appContext =>
@@ -19,27 +18,26 @@ BuildContext? get _appContext =>
 void showInfoToast(String message) {
   final context = _appContext;
   if (context == null) return;
-  TToast.showText(message, context: context);
+  TMessage.show(context: context, content: message, variant: TMessageVariant.info);
 }
 
 /// 成功提示
 void showSuccessToast(String message) {
   final context = _appContext;
   if (context == null) return;
-  // 图标+文字型 Toast 默认只允许 1 行（maxWidth 191），长文案会被省略号截断，这里放开到 2 行。
-  TToast.showSuccess(message, context: context, maxLines: 2);
+  TMessage.show(context: context, content: message, variant: TMessageVariant.success);
 }
 
 /// 警告提示
 void showWarningToast(String message) {
   final context = _appContext;
   if (context == null) return;
-  TToast.showWarning(message, context: context, maxLines: 2);
+  TMessage.show(context: context, content: message, variant: TMessageVariant.warning);
 }
 
 /// 错误提示
 void showErrorToast(String message) {
   final context = _appContext;
   if (context == null) return;
-  TToast.showFail(message, context: context, maxLines: 2);
+  TMessage.show(context: context, content: message, variant: TMessageVariant.error);
 }
