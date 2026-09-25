@@ -433,6 +433,9 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
     final id = _dragId;
     final cell = _dropCell.value;
     final hovering = _unscheduleBar.value.hovered;
+    // 落位用的广场条目必须在 _resetDrag() 之前捕获：它会清空 _dragItem，
+    // 否则下面 plaza 分支拿到 null，拖拽排班永远不生效。
+    final plazaItem = _dragItem;
 
     _resetDrag();
     if (kind == null || id == null) return;
@@ -456,7 +459,7 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
     final target = DropTarget(date: cell.date, startHour: _dropStartHour);
     final planStore = _planStore;
     if (kind == DragKind.plaza) {
-      final item = _dragItem;
+      final item = plazaItem;
       if (item == null) return;
       planStore.scheduleFromPlaza(
         title: item.title,

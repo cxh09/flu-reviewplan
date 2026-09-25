@@ -89,7 +89,7 @@ class PlanBlockView extends StatelessWidget {
                           children: <Widget>[
                             Text(
                               plan.title,
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 12,
@@ -116,14 +116,12 @@ class PlanBlockView extends StatelessWidget {
                       ),
                       _buildHandle(
                         context,
-                        color: color,
                         alignLeft: true,
                         onStart: (position) =>
                             onDragStart(plan, DragKind.resizeStart, position),
                       ),
                       _buildHandle(
                         context,
-                        color: color,
                         alignLeft: false,
                         onStart: (position) =>
                             onDragStart(plan, DragKind.resizeEnd, position),
@@ -139,10 +137,10 @@ class PlanBlockView extends StatelessWidget {
     );
   }
 
-  /// 拉伸手柄：18px 宽的触摸区 + 中间一条 3px 的可见握把
+  /// 拉伸手柄：左右两端各 18px 的隐形触摸区（长按拖动改开始时间 / 时长）。
+  /// 不再画可见握把，保持块面整洁；边缘拖拽手感不变。
   Widget _buildHandle(
     BuildContext context, {
-    required Color color,
     required bool alignLeft,
     required ValueChanged<Offset> onStart,
   }) {
@@ -158,16 +156,7 @@ class PlanBlockView extends StatelessWidget {
         onLongPressMoveUpdate: (details) => onDragUpdate(details.globalPosition),
         onLongPressEnd: (_) => onDragEnd(),
         onLongPressCancel: onDragEnd,
-        child: Center(
-          child: Container(
-            width: 3,
-            height: 22,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-        ),
+        child: const SizedBox.expand(),
       ),
     );
   }

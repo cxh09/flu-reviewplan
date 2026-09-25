@@ -11,8 +11,13 @@ class ScheduleMetrics {
   /// 每个整点列的宽度
   static const double hourWidth = 92;
 
-  /// 同一时间段重叠时每层的高度
-  static const double laneHeight = 60;
+  /// 同一时间段重叠时每层的高度（需容纳两行标题 + 时间行）
+  static const double laneHeight = 76;
+
+  /// 短日程的最小显示宽度（小时）：不足 1 小时的块向右撑到 1 小时格，
+  /// 否则 30 分钟的块只有一半列宽，标题几乎显示不出来。
+  /// 只影响视觉宽度：时间文字、拖拽与拉伸仍按真实起止时间计算。
+  static const double minDisplayHours = 1;
 
   /// 拉伸 / 落点吸附的粒度（分钟）
   static const int snapMinutes = 15;
@@ -82,6 +87,7 @@ class PlanBlockLayout {
     required this.lane,
     required this.start,
     required this.end,
+    required this.displayEnd,
   });
 
   final Plan plan;
@@ -91,12 +97,16 @@ class PlanBlockLayout {
   final double start;
   final double end;
 
-  /// 横向位置：按时间轴百分比铺开，宽度就是时长
+  /// 视觉右边界：短块按最小显示宽度向右撑开，止于同车道下一块；
+  /// 只用于算宽度，时间文字仍用真实的 [end]。
+  final double displayEnd;
+
+  /// 横向位置：按时间轴百分比定位（宽度＝时长）
   double get left =>
       (start - kFirstHour) / kHoursCount * ScheduleMetrics.contentWidth;
 
   double get width =>
-      (end - start) / kHoursCount * ScheduleMetrics.contentWidth;
+      (displayEnd - start) / kHoursCount * ScheduleMetrics.contentWidth;
 }
 
 /// 一天的分层排版结果
@@ -147,14 +157,17 @@ DayLayout computeDayLayout(List<Plan> items, String signature) {
     final minutes =
         plan.duration < ScheduleMetrics.snapMinutes ? ScheduleMetrics.snapMinutes : plan.duration;
     final end = clampDouble(start + minutes / 60, start, kEndHour.toDouble());
-    entries.add(PlanBlockLayout(plan: plan, lane: 0, start: start, end: end));
+    // 中间结果：lane 与 displayEnd 会在下面的分车道 / 最小宽度阶段重算
+    entries.add(
+      PlanBlockLayout(plan: plan, lane: 0, start: start, end: end, displayEnd: end),
+    );
   }
   entries.sort((a, b) => a.start == b.start ? a.end.compareTo(b.end) : a.start.compareTo(b.start));
 
   // 经典的"最少车道"分配：每一层记录当前结束时间，
   // 新条目优先塞进最早腾出来的那一层
   final laneEnds = <double>[];
-  final blocks = <PlanBlockLayout>[];
+  final laneOf = <int>[];
   for (final entry in entries) {
     var lane = laneEnds.indexWhere((end) => end <= entry.start);
     if (lane == -1) {
@@ -162,15 +175,37 @@ DayLayout computeDayLayout(List<Plan> items, String signature) {
       laneEnds.add(0);
     }
     laneEnds[lane] = entry.end;
-    blocks.add(
-      PlanBlockLayout(
-        plan: entry.plan,
-        lane: lane,
-        start: entry.start,
-        end: entry.end,
-      ),
-    );
+    laneOf.add(lane);
   }
+
+  // 短块向右撑到最小显示宽度；entries 已按开始时间排序，同车道内
+  // 彼此不重叠，因此止于下一块的开始时间即可避免遮挡。
+  final displayEnd = List<double>.filled(entries.length, 0);
+  final laneBuckets = <int, List<int>>{};
+  for (var i = 0; i < entries.length; i += 1) {
+    (laneBuckets[laneOf[i]] ??= <int>[]).add(i);
+  }
+  for (final bucket in laneBuckets.values) {
+    for (var k = 0; k < bucket.length; k += 1) {
+      final i = bucket[k];
+      final nextStart =
+          k + 1 < bucket.length ? entries[bucket[k + 1]].start : kEndHour.toDouble();
+      final desired = entries[i].start + ScheduleMetrics.minDisplayHours;
+      final expanded = entries[i].end > desired ? entries[i].end : desired;
+      displayEnd[i] = clampDouble(expanded, entries[i].end, nextStart);
+    }
+  }
+
+  final blocks = <PlanBlockLayout>[
+    for (var i = 0; i < entries.length; i += 1)
+      PlanBlockLayout(
+        plan: entries[i].plan,
+        lane: laneOf[i],
+        start: entries[i].start,
+        end: entries[i].end,
+        displayEnd: displayEnd[i],
+      ),
+  ];
 
   return DayLayout(
     signature: signature,
