@@ -42,6 +42,10 @@ dependencies:
   url_launcher: ^6.3.2
   # 设置页选头像：用 pickImage 的 maxWidth/maxHeight/imageQuality 原生压缩，无需 image 包
   image_picker: ^1.1.2
+  # 完成详情选附件（任意文件，withData 拿字节后 base64 上传）
+  file_picker: ^10.0.0
+  # 完成详情图片压到 ≤1MB 预览版（decode/copyResize/encodeJpg）
+  image: ^4.9.2
   flutter_localizations:
     sdk: flutter
 dev_dependencies:

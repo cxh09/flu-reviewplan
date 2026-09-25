@@ -3,6 +3,27 @@ import '../utils/date_utils.dart';
 import '../utils/id_utils.dart';
 import '../utils/url_utils.dart';
 
+/// 完成详情的文件引用：只认服务端 /uploads/ 下的随机文件名，其余丢弃；最多 9 项。
+/// preview 为 ≤1MB 的压缩预览图，展示默认用它，查看原图才加载 url。
+List<Map<String, dynamic>> sanitizeFileRefs(Object? list) {
+  if (list is! List) return <Map<String, dynamic>>[];
+  final pattern = RegExp(r'^/uploads/[\w.-]+$');
+  final refs = <Map<String, dynamic>>[];
+  for (final item in list) {
+    if (item is! Map) continue;
+    final url = '${item['url'] ?? ''}';
+    if (!pattern.hasMatch(url)) continue;
+    var name = '${item['name'] ?? ''}';
+    if (name.length > 120) name = name.substring(0, 120);
+    final ref = <String, dynamic>{'name': name, 'url': url};
+    final preview = '${item['preview'] ?? ''}';
+    if (pattern.hasMatch(preview)) ref['preview'] = preview;
+    refs.add(ref);
+    if (refs.length >= 9) break;
+  }
+  return refs;
+}
+
 /// 排版计划：已安排到某天某个时段的复习任务。
 ///
 /// 字段与网页版 `stores/plan.js` 的 `plan` 完全一致。
@@ -22,6 +43,9 @@ class Plan {
     this.startHour = 6.0,
     this.note = '',
     this.done = false,
+    this.doneNote = '',
+    this.doneImages = const <Map<String, dynamic>>[],
+    this.doneFiles = const <Map<String, dynamic>>[],
   });
 
   final String id;
@@ -43,6 +67,11 @@ class Plan {
   final double startHour;
   final String note;
   final bool done;
+
+  /// 完成详情：说明文字 + 图片 / 附件引用（文件存服务端，这里只存 URL）
+  final String doneNote;
+  final List<Map<String, dynamic>> doneImages;
+  final List<Map<String, dynamic>> doneFiles;
 
   /// 兼容旧数据与导入数据：补齐缺失字段并夹回合法范围
   factory Plan.fromJson(Map<String, dynamic>? raw) {
@@ -73,6 +102,9 @@ class Plan {
       ),
       note: '${data['note'] ?? ''}',
       done: data['done'] == true,
+      doneNote: '${data['doneNote'] ?? ''}',
+      doneImages: sanitizeFileRefs(data['doneImages']),
+      doneFiles: sanitizeFileRefs(data['doneFiles']),
     );
   }
 
@@ -91,6 +123,9 @@ class Plan {
         'startHour': startHour,
         'note': note,
         'done': done,
+        'doneNote': doneNote,
+        'doneImages': doneImages,
+        'doneFiles': doneFiles,
       };
 
   Plan copyWith({
@@ -108,6 +143,9 @@ class Plan {
     double? startHour,
     String? note,
     bool? done,
+    String? doneNote,
+    List<Map<String, dynamic>>? doneImages,
+    List<Map<String, dynamic>>? doneFiles,
   }) {
     return Plan(
       id: id ?? this.id,
@@ -124,6 +162,9 @@ class Plan {
       startHour: startHour ?? this.startHour,
       note: note ?? this.note,
       done: done ?? this.done,
+      doneNote: doneNote ?? this.doneNote,
+      doneImages: doneImages ?? this.doneImages,
+      doneFiles: doneFiles ?? this.doneFiles,
     );
   }
 }

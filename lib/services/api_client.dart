@@ -144,6 +144,26 @@ class ApiClient {
     );
   }
 
+  /// 上传完成详情的图片 / 附件（base64），服务端校验后落盘。
+  /// 返回 `{ url: '/uploads/xxx' }`，展示时自行拼服务端地址前缀。
+  static Future<Map<String, dynamic>?> uploadFile(
+    String baseUrl,
+    String token, {
+    required String name,
+    required String mime,
+    required String base64Data,
+  }) {
+    return request(
+      baseUrl,
+      '/api/upload',
+      method: 'POST',
+      body: <String, dynamic>{'name': name, 'mime': mime, 'data': base64Data},
+      token: token,
+      // 大图 / 附件 base64 上传比快照慢，单独放宽超时
+      timeout: const Duration(seconds: 30),
+    );
+  }
+
   /// 创建分享链接：登记一个日期范围，返回含随机 `code`。
   static Future<Map<String, dynamic>?> createShare(
     String baseUrl,

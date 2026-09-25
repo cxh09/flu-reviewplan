@@ -293,6 +293,9 @@ class PlanStore extends ChangeNotifier {
     String? date,
     double? startHour,
     int? duration,
+    String? doneNote,
+    List<Map<String, dynamic>>? doneImages,
+    List<Map<String, dynamic>>? doneFiles,
   }) {
     if (!ensureWritable()) return null;
 
@@ -319,6 +322,13 @@ class PlanStore extends ChangeNotifier {
     if (duration != null) {
       next = next.copyWith(duration: clampInt(duration, kMinDuration, kMaxDuration));
     }
+    if (doneNote != null) {
+      final text = doneNote.length > 2000 ? doneNote.substring(0, 2000) : doneNote;
+      next = next.copyWith(doneNote: text);
+    }
+    // 图片 / 附件引用整体替换（增删都走这里），逐条清洗非法 url
+    if (doneImages != null) next = next.copyWith(doneImages: sanitizeFileRefs(doneImages));
+    if (doneFiles != null) next = next.copyWith(doneFiles: sanitizeFileRefs(doneFiles));
 
     _replacePlanAt(
       index,
