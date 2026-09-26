@@ -579,6 +579,52 @@ class AppFormField extends StatelessWidget {
   }
 }
 
+/// 单行文本输入：包一层 [TInput]。
+///
+/// TInput 内置的清除按钮是一个 48px 的 IconButton，配合其默认 isCollapsed 装饰
+/// 会把单行输入撑高、文字顶对齐、下划线沉到底部（空字段无清除按钮时正常）。
+/// 这里用 isDense + 纵向内边距把文字与后缀垂直居中对齐，统一修掉"文字偏上"。
+class AppTextInput extends StatelessWidget {
+  const AppTextInput({
+    super.key,
+    required this.controller,
+    this.hintText,
+    this.inputType = TextInputType.text,
+    this.obscureText = false,
+    this.focusNode,
+    this.onChanged,
+    this.onEditingComplete,
+  });
+
+  final TextEditingController controller;
+  final String? hintText;
+  final TextInputType inputType;
+  final bool obscureText;
+  final FocusNode? focusNode;
+  final ValueChanged<String>? onChanged;
+  final VoidCallback? onEditingComplete;
+
+  static const InputDecoration _centeredDecoration = InputDecoration(
+    isCollapsed: false,
+    isDense: true,
+    contentPadding: EdgeInsets.symmetric(vertical: 12),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return TInput(
+      controller: controller,
+      hintText: hintText,
+      inputType: inputType,
+      obscureText: obscureText,
+      focusNode: focusNode,
+      onChanged: onChanged,
+      onEditingComplete: onEditingComplete,
+      decoration: _centeredDecoration,
+    );
+  }
+}
+
 /// 一排可点选的标签（科目 / 开始时间这类选项在手机上比下拉框更好点）
 class ChoiceChips<T> extends StatelessWidget {
   const ChoiceChips({

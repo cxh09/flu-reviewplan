@@ -321,7 +321,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        TInput(
+                        AppTextInput(
                           controller: _nameController,
                           focusNode: _nameFocusNode,
                           hintText: '用户名（用于分享页署名）',
@@ -515,7 +515,7 @@ class _SettingsPageState extends State<SettingsPage> {
               AppFormField(
                 label: '服务端地址',
                 tip: '例如 http://localhost:3000 或 http://192.168.1.10:3000',
-                child: TInput(
+                child: AppTextInput(
                   controller: _serverController,
                   hintText: 'http://localhost:3000',
                   inputType: TextInputType.url,
@@ -525,7 +525,7 @@ class _SettingsPageState extends State<SettingsPage> {
               AppFormField(
                 label: '访问令牌',
                 tip: '需要手动填写，与服务端 ACCESS_TOKEN 保持一致',
-                child: TInput(
+                child: AppTextInput(
                   controller: _tokenController,
                   hintText: '可选',
                   obscureText: true,

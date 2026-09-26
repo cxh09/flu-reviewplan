@@ -101,7 +101,7 @@ class _PlazaItemSheetState extends State<_PlazaItemSheet> {
         children: <Widget>[
           AppFormField(
             label: '日程标题',
-            child: TInput(
+            child: AppTextInput(
               controller: _titleController,
               hintText: '例如：函数与导数专题刷题',
             ),
@@ -143,7 +143,7 @@ class _PlazaItemSheetState extends State<_PlazaItemSheet> {
           AppFormField(
             label: '附件或链接',
             tip: '粘贴网盘 / 文档链接，选填',
-            child: TInput(
+            child: AppTextInput(
               controller: _linkController,
               hintText: 'https://…',
               inputType: TextInputType.url,

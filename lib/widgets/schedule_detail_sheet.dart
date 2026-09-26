@@ -559,7 +559,7 @@ class _ScheduleDetailSheetState extends State<_ScheduleDetailSheet> {
           const SizedBox(height: 16),
           AppFormField(
             label: '日程名称',
-            child: TInput(
+            child: AppTextInput(
               controller: _titleController,
               onChanged: (value) => planStore.updatePlan(widget.planId, title: value),
             ),
@@ -567,7 +567,7 @@ class _ScheduleDetailSheetState extends State<_ScheduleDetailSheet> {
           AppFormField(
             label: '附件或链接',
             tip: '粘贴网盘 / 文档链接，选填',
-            child: TInput(
+            child: AppTextInput(
               controller: _linkController,
               hintText: 'https://…',
               inputType: TextInputType.url,

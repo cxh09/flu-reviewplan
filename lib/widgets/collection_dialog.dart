@@ -109,7 +109,7 @@ class _CollectionSheetState extends State<_CollectionSheet> {
         children: <Widget>[
           AppFormField(
             label: '合集名称',
-            child: TInput(
+            child: AppTextInput(
               controller: _nameController,
               hintText: '例如：数学专题突破',
             ),
