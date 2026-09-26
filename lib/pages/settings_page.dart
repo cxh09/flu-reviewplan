@@ -30,8 +30,14 @@ class _SettingsPageState extends State<SettingsPage> {
 
   /// 个人资料（分享署名）：用户名输入 + 待保存的头像 dataURL 及其解码字节
   late final TextEditingController _nameController;
+  final FocusNode _nameFocusNode = FocusNode();
   String? _avatarDataUrl;
   Uint8List? _avatarBytes;
+
+  /// 上一次从 store（含联网拉取）同步到输入框的资料值：
+  /// 只有当 store 里的资料变化（多为联网拉到）时才回填，避免打断正在输入的用户。
+  String _syncedProfileName = '';
+  String _syncedProfileAvatar = '';
 
   /// 当前进行中的操作：test | reconnect，用于按钮 loading
   String _action = '';
@@ -44,6 +50,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _tokenController = TextEditingController(text: syncStore.accessToken);
     final planStore = context.read<PlanStore>();
     _nameController = TextEditingController(text: planStore.profileName);
+    _syncedProfileName = planStore.profileName;
+    _syncedProfileAvatar = planStore.profileAvatar;
     _applyAvatar(planStore.profileAvatar.isEmpty ? null : planStore.profileAvatar);
   }
 
@@ -52,6 +60,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _serverController.dispose();
     _tokenController.dispose();
     _nameController.dispose();
+    _nameFocusNode.dispose();
     super.dispose();
   }
 
@@ -77,7 +86,10 @@ class _SettingsPageState extends State<SettingsPage> {
     }
 
     setState(() => _action = 'test');
-    final result = await syncStore.testConnection();
+    final result = await runWithLoading(
+      () => syncStore.testConnection(),
+      message: '测试中…',
+    );
     if (!mounted) return;
     setState(() => _action = '');
 
@@ -98,7 +110,10 @@ class _SettingsPageState extends State<SettingsPage> {
     }
 
     setState(() => _action = 'reconnect');
-    final result = await syncStore.connect();
+    final result = await runWithLoading(
+      () => syncStore.connect(),
+      message: '连接中…',
+    );
     if (!mounted) return;
     setState(() => _action = '');
 
@@ -224,6 +239,17 @@ class _SettingsPageState extends State<SettingsPage> {
     final planStore = context.watch<PlanStore>();
     final syncStore = context.watch<SyncStore>();
 
+    // 个人资料随快照同步：联网拉到新资料时回填输入框；
+    // 用户名框正在编辑（有焦点）时不打断，头像直接跟随远端。
+    if (planStore.profileName != _syncedProfileName) {
+      _syncedProfileName = planStore.profileName;
+      if (!_nameFocusNode.hasFocus) _nameController.text = planStore.profileName;
+    }
+    if (planStore.profileAvatar != _syncedProfileAvatar) {
+      _syncedProfileAvatar = planStore.profileAvatar;
+      _applyAvatar(planStore.profileAvatar.isEmpty ? null : planStore.profileAvatar);
+    }
+
     final days = planStore.daysToGaokao;
     final daysText = days > 0
         ? '距离高考还有 $days 天'
@@ -297,6 +323,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       children: <Widget>[
                         TInput(
                           controller: _nameController,
+                          focusNode: _nameFocusNode,
                           hintText: '用户名（用于分享页署名）',
                           onEditingComplete: _saveProfile,
                         ),

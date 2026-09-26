@@ -67,6 +67,7 @@ class _ShareSheetState extends State<_ShareSheet> {
     }
 
     setState(() => _submitting = true);
+    showLoading(message: '生成中…');
     try {
       final res = await ApiClient.createShare(
         sync.normalizedUrl,
@@ -86,6 +87,7 @@ class _ShareSheetState extends State<_ShareSheet> {
     } catch (err) {
       showErrorToast('$err');
     } finally {
+      hideLoading();
       if (mounted) setState(() => _submitting = false);
     }
   }
@@ -142,11 +144,6 @@ class _ShareSheetState extends State<_ShareSheet> {
           const SizedBox(height: 14),
           _dateRow(theme, label: '开始日期', value: _start, onTap: _pickStart),
           _dateRow(theme, label: '结束日期', value: _end, onTap: _pickEnd),
-          if (_submitting)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Center(child: TLoading(size: TLoadingSize.medium)),
-            ),
           if (_url.isNotEmpty) ...<Widget>[
             const SizedBox(height: 6),
             AppFormField(

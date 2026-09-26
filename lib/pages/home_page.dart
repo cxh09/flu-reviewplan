@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bounce/flutter_bounce.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
@@ -9,6 +10,7 @@ import '../utils/app_tabs.dart';
 import '../utils/date_utils.dart';
 import '../utils/responsive.dart';
 import '../widgets/app_ui.dart';
+import '../widgets/schedule_detail_sheet.dart';
 
 /// 首页（对应网页版 `views/HomeView.vue`）：
 /// 高考倒计时 + 整体统计 + 未来 7 天的排版计划总览。
@@ -323,56 +325,61 @@ class _PlanRow extends StatelessWidget {
     final theme = context.tTheme;
     final color = categoryColor(plan.category);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: theme.bgColorSecondaryContainer,
-        borderRadius: BorderRadius.circular(theme.radiusDefault),
-      ),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 3,
-            height: 18,
-            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
-          ),
-          const SizedBox(width: 10),
-          SizedBox(
-            width: 46,
-            child: Text(
-              formatClock(plan.startHour),
-              style: TextStyle(
-                fontSize: 12,
-                fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
-                color: theme.textColorSecondary,
+    return Bounce(
+      duration: const Duration(milliseconds: 120),
+      // 点击任务行弹出半屏详情，可直接标记完成并上传完成情况
+      onPressed: () => showScheduleDetailSheet(context, plan.id),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: theme.bgColorSecondaryContainer,
+          borderRadius: BorderRadius.circular(theme.radiusDefault),
+        ),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: 3,
+              height: 18,
+              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(width: 10),
+            SizedBox(
+              width: 46,
+              child: Text(
+                formatClock(plan.startHour),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+                  color: theme.textColorSecondary,
+                ),
               ),
             ),
-          ),
-          Expanded(
-            child: Text(
-              plan.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                color: plan.done ? theme.textColorPlaceholder : theme.textColorPrimary,
-                decoration: plan.done ? TextDecoration.lineThrough : null,
+            Expanded(
+              child: Text(
+                plan.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: plan.done ? theme.textColorPlaceholder : theme.textColorPrimary,
+                  decoration: plan.done ? TextDecoration.lineThrough : null,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 6),
-          MetaChip(text: plan.category, color: color),
-          const SizedBox(width: 6),
-          Text(
-            '${plan.duration} 分钟',
-            style: TextStyle(fontSize: 11, color: theme.textColorPlaceholder),
-          ),
-          if (plan.done) ...<Widget>[
             const SizedBox(width: 6),
-            Icon(TIcons.check_circle, size: 14, color: theme.successNormalColor),
+            MetaChip(text: plan.category, color: color),
+            const SizedBox(width: 6),
+            Text(
+              '${plan.duration} 分钟',
+              style: TextStyle(fontSize: 11, color: theme.textColorPlaceholder),
+            ),
+            if (plan.done) ...<Widget>[
+              const SizedBox(width: 6),
+              Icon(TIcons.check_circle, size: 14, color: theme.successNormalColor),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

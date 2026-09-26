@@ -193,6 +193,7 @@ class _ScheduleDetailSheetState extends State<_ScheduleDetailSheet> {
     }
 
     setState(() => _uploading = 'image');
+    showLoading(message: '上传中…');
     final refs = List<Map<String, dynamic>>.from(
       plan.doneImages.map((item) => Map<String, dynamic>.from(item)),
     );
@@ -267,6 +268,7 @@ class _ScheduleDetailSheetState extends State<_ScheduleDetailSheet> {
     } catch (_) {
       showErrorToast('图片上传失败');
     } finally {
+      hideLoading();
       if (mounted) setState(() => _uploading = '');
     }
   }
@@ -291,6 +293,7 @@ class _ScheduleDetailSheetState extends State<_ScheduleDetailSheet> {
     }
 
     setState(() => _uploading = 'file');
+    showLoading(message: '上传中…');
     final refs = List<Map<String, dynamic>>.from(plan.doneFiles);
     try {
       for (final file in result.files) {
@@ -328,6 +331,7 @@ class _ScheduleDetailSheetState extends State<_ScheduleDetailSheet> {
     } catch (_) {
       showErrorToast('附件上传失败');
     } finally {
+      hideLoading();
       if (mounted) setState(() => _uploading = '');
     }
   }
@@ -348,74 +352,60 @@ class _ScheduleDetailSheetState extends State<_ScheduleDetailSheet> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
-  /// 全屏预览完成详情图片：默认看 ≤1MB 压缩版，点「查看原图」才加载原图；点背景关闭
-  Future<void> _showDoneImage(Map<String, dynamic> ref) {
-    final original = '${ref['url'] ?? ''}';
-    final preview = '${ref['preview'] ?? ''}';
-    final canToggle = preview.isNotEmpty && preview != original;
-    final showOriginal = ValueNotifier<bool>(false);
-    return showDialog<void>(
-      context: context,
-      builder: (dialogContext) => GestureDetector(
-        onTap: () => Navigator.of(dialogContext).pop(),
-        child: Container(
-          color: Colors.black,
-          child: Stack(
-            fit: StackFit.expand,
-            children: <Widget>[
-              Center(
-                child: ValueListenableBuilder<bool>(
-                  valueListenable: showOriginal,
-                  builder: (context, useOriginal, _) {
-                    final url = useOriginal || preview.isEmpty ? original : preview;
-                    return InteractiveViewer(
-                      child: Image.network(
-                        _absUrl(url),
-                        loadingBuilder: (context, child, progress) =>
-                            progress == null ? child : const Center(
-                              child: TLoading(size: TLoadingSize.medium),
-                            ),
-                      ),
-                    );
-                  },
-                ),
+  /// 全屏预览完成详情图片：分页、页码、关闭都交给 TDesign [TImageViewer]。
+  ///
+  /// 仍然守住“默认只看 ≤1MB 压缩版”这条策略：预览图与原图是两份不同的
+  /// ImageProvider，点右上角「查看原图」才去拉原图，再点换回预览版。
+  void _showDoneImages(List<Map<String, dynamic>> refs, int index) {
+    if (refs.isEmpty) return;
+    // 本次预览里已切到原图的序号；ImageViewer 的图列表在打开时定死，
+    // 所以切换后关掉重开，换掉那一张的 ImageProvider。
+    final originals = <int>{};
+
+    void open(int at) {
+      TImageViewer.show(
+        context: context,
+        images: <ImageProvider<Object>>[
+          for (var i = 0; i < refs.length; i += 1)
+            NetworkImage(
+              _absUrl(
+                originals.contains(i)
+                    ? '${refs[i]['url'] ?? ''}'
+                    : '${refs[i]['preview'] ?? refs[i]['url'] ?? ''}',
               ),
-              if (canToggle)
-                Positioned(
-                  top: MediaQuery.of(dialogContext).padding.top + 16,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: ValueListenableBuilder<bool>(
-                      valueListenable: showOriginal,
-                      builder: (context, useOriginal, _) => GestureDetector(
-                        onTap: () => showOriginal.value = !useOriginal,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.9),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            useOriginal ? '返回预览' : '查看原图',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    ).whenComplete(showOriginal.dispose);
+            ),
+        ],
+        initialIndex: at,
+        trailingBuilder: (viewerContext, i) {
+          final preview = '${refs[i]['preview'] ?? ''}';
+          final original = '${refs[i]['url'] ?? ''}';
+          // 没有独立预览图的（小图直传）不需要切换入口
+          if (preview.isEmpty || preview == original) {
+            return const SizedBox.shrink();
+          }
+          final usingOriginal = originals.contains(i);
+          return IconButton(
+            tooltip: usingOriginal ? '返回预览' : '查看原图',
+            color: context.tTheme.textColorAnti,
+            onPressed: () {
+              if (usingOriginal) {
+                originals.remove(i);
+              } else {
+                originals.add(i);
+              }
+              Navigator.of(viewerContext).pop();
+              if (mounted) open(i);
+            },
+            icon: Icon(
+              usingOriginal ? TIcons.rollback : TIcons.image,
+              size: 20,
+            ),
+          );
+        },
+      );
+    }
+
+    open(index.clamp(0, refs.length - 1));
   }
 
   /// 详情里通用的「点一行改一个值」样式
@@ -486,7 +476,17 @@ class _ScheduleDetailSheetState extends State<_ScheduleDetailSheet> {
                   colorScheme: TButtonColorScheme.primary,
                   icon: Icon(plan.done ? TIcons.rollback : TIcons.check, size: 16),
                   child: Text(plan.done ? '标记为未完成' : '标记为已完成'),
-                  onPressed: () => planStore.togglePlanDone(plan.id),
+                  // 全在线模式：改完把最新数据推回云端，期间用 loading 遮罩做过渡
+                  onPressed: () async {
+                    final sync = context.read<SyncStore>();
+                    await runWithLoading(
+                      () async {
+                        planStore.togglePlanDone(plan.id);
+                        await sync.pushNow();
+                      },
+                      message: '同步中…',
+                    );
+                  },
                 ),
               ),
             ],
@@ -497,9 +497,15 @@ class _ScheduleDetailSheetState extends State<_ScheduleDetailSheet> {
             colorScheme: TButtonColorScheme.danger,
             icon: const Icon(TIcons.delete, size: 16),
             child: const Text('删除日程'),
-            onPressed: () {
-              planStore.removePlan(plan.id);
-              Navigator.of(context).maybePop();
+            onPressed: () async {
+              final sync = context.read<SyncStore>();
+              await runWithLoading(
+                () async {
+                  planStore.removePlan(plan.id);
+                  await sync.pushNow();
+                },
+                message: '删除中…',
+              );
               if (isOnline) showSuccessToast('日程已删除');
             },
           ),
@@ -630,9 +636,9 @@ class _ScheduleDetailSheetState extends State<_ScheduleDetailSheet> {
                   children: <Widget>[
                     for (final entry in plan.doneImages.indexed)
                       GestureDetector(
-                        onTap: () => _showDoneImage(
-                          Map<String, dynamic>.from(entry.$2),
-                        ),
+                        // 给测试一个稳定的定位锚点，预览整条链路都靠它驱动
+                        key: ValueKey<String>('done-image-${entry.$1}'),
+                        onTap: () => _showDoneImages(plan.doneImages, entry.$1),
                         child: SizedBox(
                           width: 72,
                           height: 72,

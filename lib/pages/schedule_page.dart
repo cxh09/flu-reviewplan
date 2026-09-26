@@ -52,7 +52,9 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
   /// 拖起浮层的弹入动画
   late final AnimationController _liftAnim;
 
-  double _hOffset = 0;
+  /// 横向偏移放在 ValueNotifier 上：拖动只更新它，配合各处的
+  /// ValueListenableBuilder 局部重建，不再触发整页 setState。
+  final ValueNotifier<double> _hOffsetNotifier = ValueNotifier<double>(0);
   double _availableWidth = 0;
 
   late List<String> _days;
@@ -124,7 +126,7 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
       lowerBound: 0,
       upperBound: ScheduleMetrics.contentWidth,
     );
-    _hAnim.addListener(() => setState(() => _hOffset = _hAnim.value));
+    _hAnim.addListener(() => _hOffsetNotifier.value = _hAnim.value);
     _liftAnim = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 180),
@@ -152,6 +154,7 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
     _nowTimer?.cancel();
     _stopAutoScroll();
     _hAnim.dispose();
+    _hOffsetNotifier.dispose();
     _liftAnim.dispose();
     _draggingId.dispose();
     _dragPosition.dispose();
@@ -284,21 +287,22 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
 
   // ---------- 横向滚动 ----------
 
+  double get _hOffset => _hOffsetNotifier.value;
+
   double get _maxHOffset =>
       clampDouble(ScheduleMetrics.contentWidth - _availableWidth, 0, ScheduleMetrics.contentWidth);
 
   void _setHOffset(double value) {
     final next = clampDouble(value, 0, _maxHOffset);
-    if (next == _hOffset) return;
+    if (next == _hOffsetNotifier.value) return;
     _hAnim.value = next;
   }
 
   void _onHorizontalDragUpdate(DragUpdateDetails details) {
     _hAnim.stop();
-    setState(() {
-      _hOffset = clampDouble(_hOffset - details.delta.dx, 0, _maxHOffset);
-      _hAnim.value = _hOffset;
-    });
+    final next = clampDouble(_hOffset - details.delta.dx, 0, _maxHOffset);
+    _hOffsetNotifier.value = next;
+    _hAnim.value = next;
   }
 
   void _onHorizontalDragEnd(DragEndDetails details) {
@@ -539,7 +543,7 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
 
       if (_autoScrollDx != 0) {
         final next = clampDouble(_hOffset + _autoScrollDx, 0, _maxHOffset);
-        if (next != _hOffset) setState(() => _hOffset = next);
+        if (next != _hOffsetNotifier.value) _hOffsetNotifier.value = next;
       }
       if (_autoScrollDy != 0 && _vController.hasClients) {
         final position = _vController.position;
@@ -795,10 +799,11 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
             child: ClipRect(
               child: SizedBox(
                 height: 34,
-                child: Transform.translate(
-                  offset: Offset(-_hOffset, 0),
-                  // 时间轴内容宽（contentWidth）大于视口：用 OverflowBox 让子项按自身宽度布局，
-                  // 外层 ClipRect 裁切、_hOffset 平移（UnconstrainedBox 仍会报溢出）。
+                // 只订阅横向偏移：小时标签作为 child 复用，滑动仅换 Transform。
+                child: ValueListenableBuilder<double>(
+                  valueListenable: _hOffsetNotifier,
+                  builder: (context, offset, child) =>
+                      Transform.translate(offset: Offset(-offset, 0), child: child),
                   child: OverflowBox(
                     maxWidth: ScheduleMetrics.contentWidth,
                     alignment: Alignment.centerLeft,
@@ -865,8 +870,12 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
           _buildDateCell(theme, date, today),
           Expanded(
             child: ClipRect(
-              child: Transform.translate(
-                offset: Offset(-_hOffset, 0),
+              // 只订阅横向偏移：格子行与计划块作为 child 复用，
+              // 横向滑动仅换 Transform，不重建这一行内容。
+              child: ValueListenableBuilder<double>(
+                valueListenable: _hOffsetNotifier,
+                builder: (context, offset, child) =>
+                    Transform.translate(offset: Offset(-offset, 0), child: child),
                 child: OverflowBox(
                   maxWidth: ScheduleMetrics.contentWidth,
                   alignment: Alignment.centerLeft,
@@ -1011,20 +1020,26 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
   Widget _buildNowLine(TThemeData theme) {
     if (_nowHour < kFirstHour || _nowHour > kEndHour) return const SizedBox.shrink();
 
-    final x = ScheduleMetrics.dateWidth +
-        (_nowHour - kFirstHour) / kHoursCount * ScheduleMetrics.contentWidth -
-        _hOffset;
-    if (x < ScheduleMetrics.dateWidth ||
-        x > ScheduleMetrics.dateWidth + _availableWidth) {
-      return const SizedBox.shrink();
-    }
-
-    return Positioned(
-      left: x,
-      top: 0,
-      bottom: 0,
-      width: 2,
-      child: IgnorePointer(child: Container(color: theme.errorNormalColor)),
+    // 只订阅横向偏移：红线跟随平移靠 ValueListenableBuilder 局部重建，
+    // 不再依赖整页 setState。
+    return ValueListenableBuilder<double>(
+      valueListenable: _hOffsetNotifier,
+      builder: (context, offset, _) {
+        final x = ScheduleMetrics.dateWidth +
+            (_nowHour - kFirstHour) / kHoursCount * ScheduleMetrics.contentWidth -
+            offset;
+        if (x < ScheduleMetrics.dateWidth ||
+            x > ScheduleMetrics.dateWidth + _availableWidth) {
+          return const SizedBox.shrink();
+        }
+        return Positioned(
+          left: x,
+          top: 0,
+          bottom: 0,
+          width: 2,
+          child: IgnorePointer(child: Container(color: theme.errorNormalColor)),
+        );
+      },
     );
   }
 
