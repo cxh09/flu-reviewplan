@@ -43,7 +43,7 @@ class AppCard extends StatelessWidget {
       child: onTap == null
           ? content
           : Bounce(
-              duration: const Duration(milliseconds: 120),
+              duration: AppMotion.press,
               onPressed: onTap!,
               child: content,
             ),
@@ -168,6 +168,35 @@ class AppMotion {
 
   /// 下拉速度超过这个值也判定为「要关掉」
   static const double swipeDismissVelocity = 700;
+
+  // ---------- 全局动效令牌（时长 / 曲线统一收口，避免各处硬编码跑偏） ----------
+
+  /// 按压反馈（Bounce）统一时长
+  static const Duration press = Duration(milliseconds: 120);
+
+  /// 较轻的按压反馈：ChoiceChips 这类小标签保留更跟手的短时长
+  static const Duration pressLight = Duration(milliseconds: 100);
+
+  /// 淡入淡出（遮罩 / 内容切换）
+  static const Duration fade = Duration(milliseconds: 250);
+
+  /// 状态微反馈（done 划线、落点高亮等），对齐网页端 0.15s
+  static const Duration stateChange = Duration(milliseconds: 150);
+
+  /// 状态微反馈曲线
+  static const Curve stateCurve = Curves.easeOut;
+
+  /// 拖拽浮起反馈
+  static const Duration dragLift = Duration(milliseconds: 160);
+
+  /// 拖拽浮起曲线
+  static const Curve dragLiftCurve = Curves.easeOutBack;
+
+  /// 横滚甩动惯性
+  static const Duration fling = Duration(milliseconds: 420);
+
+  /// 横滚甩动曲线
+  static const Curve flingCurve = Curves.decelerate;
 }
 
 /// 底部弹层骨架：拖拽条 + 标题 + 关闭按钮 + 内容区 + 可选底部操作区。
@@ -649,7 +678,7 @@ class ChoiceChips<T> extends StatelessWidget {
       children: options.map((option) {
         final isSelected = option == selected;
         return Bounce(
-          duration: const Duration(milliseconds: 100),
+          duration: AppMotion.pressLight,
           onPressed: () => onChanged(option),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),

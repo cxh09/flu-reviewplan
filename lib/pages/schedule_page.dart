@@ -311,8 +311,8 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
     final target = clampDouble(_hOffset + velocity * 0.18, 0, _maxHOffset);
     _hAnim.animateTo(
       target,
-      duration: const Duration(milliseconds: 420),
-      curve: Curves.decelerate,
+      duration: AppMotion.fling,
+      curve: AppMotion.flingCurve,
     );
   }
 
@@ -683,9 +683,11 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
             // 「拖到这里取消排班」
             ValueListenableBuilder<({bool visible, bool hovered})>(
               valueListenable: _unscheduleBar,
-              builder: (context, state, _) => state.visible
-                  ? _buildUnscheduleBar(theme, state.hovered)
-                  : const SizedBox.shrink(),
+              builder: (context, state, _) => _buildUnscheduleBar(
+                theme,
+                visible: state.visible,
+                over: state.hovered,
+              ),
             ),
 
             // 日程广场面板
@@ -990,7 +992,9 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
 
     return GestureDetector(
       onTap: () => setState(() => _plazaPanelOpen = true),
-      child: Container(
+      child: AnimatedContainer(
+        duration: AppMotion.stateChange,
+        curve: AppMotion.stateCurve,
         width: ScheduleMetrics.hourWidth,
         decoration: BoxDecoration(
           color: isOver
@@ -1005,14 +1009,16 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
             bottom: BorderSide(color: theme.componentStrokeColor, width: 0.5),
           ),
         ),
-        child: isOver
-            ? Center(
-                child: Text(
-                  '排到这里',
-                  style: TextStyle(fontSize: 10, color: theme.brandNormalColor),
-                ),
-              )
-            : null,
+        child: AnimatedOpacity(
+          duration: AppMotion.stateChange,
+          opacity: isOver ? 1 : 0,
+          child: Center(
+            child: Text(
+              '排到这里',
+              style: TextStyle(fontSize: 10, color: theme.brandNormalColor),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1049,49 +1055,64 @@ class _SchedulePageState extends State<SchedulePage> with TickerProviderStateMix
     return box.globalToLocal(global);
   }
 
-  Widget _buildUnscheduleBar(TThemeData theme, bool over) {
+  Widget _buildUnscheduleBar(
+    TThemeData theme, {
+    required bool visible,
+    required bool over,
+  }) {
     return Positioned(
       left: 16,
       right: 16,
       bottom: 16,
       child: IgnorePointer(
-        child: Container(
-          key: _unscheduleKey,
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: over ? theme.errorLightColor : theme.bgColorContainer,
-            borderRadius: BorderRadius.circular(theme.radiusLarge),
-            border: Border.all(
-              color: over ? theme.errorNormalColor : theme.componentBorderColor,
-              width: over ? 1.5 : 0.5,
-            ),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.12),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Icon(
-                TIcons.swap_right,
-                size: 16,
-                color: over ? theme.errorNormalColor : theme.textColorSecondary,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                over ? '松手取消排班' : '拖到这里取消排班',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: over ? FontWeight.w600 : FontWeight.w400,
-                  color: over ? theme.errorNormalColor : theme.textColorSecondary,
+        child: AnimatedScale(
+          scale: visible ? 1 : 0.92,
+          duration: AppMotion.dragLift,
+          curve: AppMotion.dragLiftCurve,
+          child: AnimatedOpacity(
+            opacity: visible ? 1 : 0,
+            duration: AppMotion.dragLift,
+            child: AnimatedContainer(
+              duration: AppMotion.stateChange,
+              curve: AppMotion.stateCurve,
+              key: _unscheduleKey,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: over ? theme.errorLightColor : theme.bgColorContainer,
+                borderRadius: BorderRadius.circular(theme.radiusLarge),
+                border: Border.all(
+                  color: over ? theme.errorNormalColor : theme.componentBorderColor,
+                  width: over ? 1.5 : 0.5,
                 ),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-            ],
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Icon(
+                    TIcons.swap_right,
+                    size: 16,
+                    color: over ? theme.errorNormalColor : theme.textColorSecondary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    over ? '松手取消排班' : '拖到这里取消排班',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: over ? FontWeight.w600 : FontWeight.w400,
+                      color: over ? theme.errorNormalColor : theme.textColorSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

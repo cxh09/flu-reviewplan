@@ -6,6 +6,7 @@ import '../data/plaza_data.dart';
 import '../models/collection.dart';
 import '../models/plaza_item.dart';
 import 'app_ui.dart';
+import 'drag_feedback.dart';
 
 /// 从底部滑出的日程广场面板。
 ///
@@ -264,14 +265,10 @@ class _PlazaChip extends StatelessWidget {
       builder: (context, dragging, _) {
         final isDragging = dragging == item.id;
 
-        return AnimatedScale(
-          scale: isDragging ? 1.02 : 1,
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutBack,
-          child: AnimatedOpacity(
-            opacity: isDragging ? 0.35 : 1,
-            duration: const Duration(milliseconds: 160),
-            child: GestureDetector(
+        return DragFeedbackWrap(
+          isDragging: isDragging,
+          scale: 1.02,
+          child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onLongPressStart: (details) => onDragStart(details.globalPosition),
               onLongPressMoveUpdate: (details) => onDragUpdate(details.globalPosition),
@@ -334,7 +331,6 @@ class _PlazaChip extends StatelessWidget {
                 ),
               ),
             ),
-          ),
         );
       },
     );

@@ -53,7 +53,6 @@ void main() {
 
   group('快照合并', () {
     Map<String, dynamic> snapshot({
-      List<Map<String, dynamic>> todos = const <Map<String, dynamic>>[],
       List<Map<String, dynamic>> plans = const <Map<String, dynamic>>[],
       List<Map<String, dynamic>> deleted = const <Map<String, dynamic>>[],
       String gaokaoDate = '2027-06-07',
@@ -62,7 +61,6 @@ void main() {
       return <String, dynamic>{
         'gaokaoDate': gaokaoDate,
         'gaokaoDateUpdatedAt': gaokaoAt,
-        'todos': todos,
         'plans': plans,
         'collections': <Map<String, dynamic>>[],
         'deleted': deleted,
@@ -71,37 +69,37 @@ void main() {
 
     test('同一条按 updatedAt 取新的', () {
       final merged = mergeSnapshots(
-        snapshot(todos: <Map<String, dynamic>>[
+        snapshot(plans: <Map<String, dynamic>>[
           <String, dynamic>{'id': 'a', 'title': '本地新', 'updatedAt': 200},
         ]),
-        snapshot(todos: <Map<String, dynamic>>[
+        snapshot(plans: <Map<String, dynamic>>[
           <String, dynamic>{'id': 'a', 'title': '云端旧', 'updatedAt': 100},
         ]),
       );
 
-      final todos = merged['todos'] as List<dynamic>;
-      expect(todos.length, 1);
-      expect((todos.first as Map)['title'], '本地新');
+      final plans = merged['plans'] as List<dynamic>;
+      expect(plans.length, 1);
+      expect((plans.first as Map)['title'], '本地新');
     });
 
     test('时间戳相同时以云端为准', () {
       final merged = mergeSnapshots(
-        snapshot(todos: <Map<String, dynamic>>[
+        snapshot(plans: <Map<String, dynamic>>[
           <String, dynamic>{'id': 'a', 'title': '本地', 'updatedAt': 100},
         ]),
-        snapshot(todos: <Map<String, dynamic>>[
+        snapshot(plans: <Map<String, dynamic>>[
           <String, dynamic>{'id': 'a', 'title': '云端', 'updatedAt': 100},
         ]),
       );
 
-      final todos = merged['todos'] as List<dynamic>;
-      expect((todos.first as Map)['title'], '云端');
+      final plans = merged['plans'] as List<dynamic>;
+      expect((plans.first as Map)['title'], '云端');
     });
 
     test('删除标记让已删除的条目不再复活', () {
       final now = DateTime.now().millisecondsSinceEpoch;
       final merged = mergeSnapshots(
-        snapshot(todos: <Map<String, dynamic>>[
+        snapshot(plans: <Map<String, dynamic>>[
           <String, dynamic>{'id': 'a', 'title': '残留副本', 'updatedAt': now - 1000},
         ]),
         snapshot(
@@ -111,7 +109,7 @@ void main() {
         ),
       );
 
-      expect(merged['todos'], isEmpty);
+      expect(merged['plans'], isEmpty);
       expect((merged['deleted'] as List).length, 1);
     });
 
@@ -273,6 +271,12 @@ void main() {
     // 弹层从 showModalBottomSheet 换成自定义路由时丢过这一层 Material（底部会出现双黄线），
     // 这个用例守住它别再丢。
     testWidgets('弹层里的文字不带错误的文本装饰', (tester) async {
+      // 默认测试画布是 800×600（宽>高），会被弹层判定为横屏而隐藏标题行；
+      // 固定成竖屏画布（逻辑 400×800），让标题 / 正文 / 按钮都渲染出来。
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(

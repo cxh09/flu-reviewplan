@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bounce/flutter_bounce.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -592,8 +593,9 @@ class _ItemRow extends StatelessWidget {
                         ),
                         MetaChip(text: formatDuration(item.duration)),
                         if (item.link.isNotEmpty)
-                          GestureDetector(
-                            onTap: _openLink,
+                          Bounce(
+                            duration: AppMotion.press,
+                            onPressed: _openLink,
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: <Widget>[

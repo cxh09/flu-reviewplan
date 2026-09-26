@@ -326,7 +326,7 @@ class _PlanRow extends StatelessWidget {
     final color = categoryColor(plan.category);
 
     return Bounce(
-      duration: const Duration(milliseconds: 120),
+      duration: AppMotion.press,
       // 点击任务行弹出半屏详情，可直接标记完成并上传完成情况
       onPressed: () => showScheduleDetailSheet(context, plan.id),
       child: Container(
@@ -356,14 +356,18 @@ class _PlanRow extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: Text(
-                plan.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: AnimatedDefaultTextStyle(
+                duration: AppMotion.stateChange,
+                curve: AppMotion.stateCurve,
                 style: TextStyle(
                   fontSize: 13,
                   color: plan.done ? theme.textColorPlaceholder : theme.textColorPrimary,
                   decoration: plan.done ? TextDecoration.lineThrough : null,
+                ),
+                child: Text(
+                  plan.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ),
@@ -374,10 +378,23 @@ class _PlanRow extends StatelessWidget {
               '${plan.duration} 分钟',
               style: TextStyle(fontSize: 11, color: theme.textColorPlaceholder),
             ),
-            if (plan.done) ...<Widget>[
-              const SizedBox(width: 6),
-              Icon(TIcons.check_circle, size: 14, color: theme.successNormalColor),
-            ],
+            // 完成时 ✓ 图标淡入淡出，未完成时回到零尺寸不占位
+            AnimatedSwitcher(
+              duration: AppMotion.stateChange,
+              switchInCurve: AppMotion.stateCurve,
+              switchOutCurve: AppMotion.stateCurve,
+              child: plan.done
+                  ? Padding(
+                      key: const ValueKey<String>('done'),
+                      padding: const EdgeInsets.only(left: 6),
+                      child: Icon(
+                        TIcons.check_circle,
+                        size: 14,
+                        color: theme.successNormalColor,
+                      ),
+                    )
+                  : const SizedBox(key: ValueKey<String>('undone')),
+            ),
           ],
         ),
       ),

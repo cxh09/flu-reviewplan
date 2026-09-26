@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bounce/flutter_bounce.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
@@ -288,8 +289,9 @@ class _SettingsPageState extends State<SettingsPage> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  GestureDetector(
-                    onTap: _pickAvatar,
+                  Bounce(
+                    duration: AppMotion.press,
+                    onPressed: _pickAvatar,
                     child: Container(
                       width: 64,
                       height: 64,
@@ -403,8 +405,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
               ),
               const SizedBox(height: 8),
-              GestureDetector(
-                onTap: _pickGaokaoDate,
+              Bounce(
+                duration: AppMotion.press,
+                onPressed: _pickGaokaoDate,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   decoration: BoxDecoration(

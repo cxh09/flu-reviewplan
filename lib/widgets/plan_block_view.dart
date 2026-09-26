@@ -5,6 +5,7 @@ import 'package:tdesign_flutter/tdesign_flutter.dart';
 import '../data/plaza_data.dart';
 import '../models/plan.dart';
 import '../utils/date_utils.dart';
+import 'drag_feedback.dart';
 import 'schedule_layout.dart';
 
 /// 日历上的一个计划块。
@@ -51,14 +52,10 @@ class PlanBlockView extends StatelessWidget {
         builder: (context, dragging, _) {
           final isDragging = dragging == plan.id;
 
-          return AnimatedScale(
-            scale: isDragging ? 1.04 : 1,
-            duration: const Duration(milliseconds: 160),
-            curve: Curves.easeOutBack,
-            child: AnimatedOpacity(
-              opacity: isDragging ? 0.35 : 1,
-              duration: const Duration(milliseconds: 160),
-              child: GestureDetector(
+          return DragFeedbackWrap(
+            isDragging: isDragging,
+            scale: 1.04,
+            child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () => onTap(plan),
                 onLongPressStart: (details) =>
@@ -130,7 +127,6 @@ class PlanBlockView extends StatelessWidget {
                   ),
                 ),
               ),
-            ),
           );
         },
       ),

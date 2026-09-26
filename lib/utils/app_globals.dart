@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
+import '../widgets/app_ui.dart';
+
 /// 全局 Navigator 句柄（路由跳转用）
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -112,8 +114,8 @@ class _LoadingOverlayState extends State<_LoadingOverlay>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 250),
-      reverseDuration: const Duration(milliseconds: 250),
+      duration: AppMotion.fade,
+      reverseDuration: AppMotion.fade,
     )..forward();
     _activeLoading = this;
   }

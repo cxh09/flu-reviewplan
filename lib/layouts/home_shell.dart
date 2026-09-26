@@ -16,6 +16,7 @@ import '../utils/app_globals.dart';
 import '../utils/app_tabs.dart';
 import '../utils/responsive.dart';
 import '../widgets/app_tab_bar.dart';
+import '../widgets/app_ui.dart';
 
 /// 应用外壳（对应网页版 `layouts/BasicLayout.vue`）：
 /// 顶部品牌 + 倒计时 + 主题切换，中间连接状态条与页面内容，底部四标签导航。
@@ -26,7 +27,8 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell>
+    with SingleTickerProviderStateMixin {
   static const List<String> _titles = <String>['首页', '日程表', '日程广场', '设置'];
 
   static const List<AppTabBarItem> _tabs = <AppTabBarItem>[
@@ -38,9 +40,17 @@ class _HomeShellState extends State<HomeShell> {
 
   int _index = 0;
 
+  /// Tab 切换淡入：只淡入淡出 IndexedStack 外层，保留各页 State（不用 AnimatedSwitcher，
+  /// 否则会重建四页、丢滚动位置并重复触发各页 initState 的联网/定时器）。
+  late final AnimationController _tabFade;
+
   @override
   void initState() {
     super.initState();
+    _tabFade = AnimationController(
+      vsync: this,
+      duration: AppMotion.fade,
+    )..value = 1;
     appTabIndex.addListener(_syncTabIndex);
     // 启动即连接云端：拿到权威数据后才允许编辑，连不上会进入只读并自动重试
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -52,10 +62,12 @@ class _HomeShellState extends State<HomeShell> {
   void _syncTabIndex() {
     if (!mounted || appTabIndex.value == _index) return;
     setState(() => _index = appTabIndex.value);
+    _tabFade.forward(from: 0);
   }
 
   @override
   void dispose() {
+    _tabFade.dispose();
     appTabIndex.removeListener(_syncTabIndex);
     super.dispose();
   }
@@ -79,20 +91,27 @@ class _HomeShellState extends State<HomeShell> {
         else
           _TopBar(title: _titles[_index]),
         if (connection.status != ConnectionStatus.online)
-          _ConnectionNotice(
-            status: connection.status,
-            message: context.watch<SyncStore>().connectionMessage,
-            onGoSettings: _goToSettings,
+          AnimatedSize(
+            duration: AppMotion.sheet,
+            curve: AppMotion.sheetCurve,
+            child: _ConnectionNotice(
+              status: connection.status,
+              message: context.watch<SyncStore>().connectionMessage,
+              onGoSettings: _goToSettings,
+            ),
           ),
         Expanded(
-          child: IndexedStack(
-            index: _index,
-            children: const <Widget>[
-              HomePage(),
-              SchedulePage(),
-              PlazaPage(),
-              SettingsPage(),
-            ],
+          child: FadeTransition(
+            opacity: _tabFade,
+            child: IndexedStack(
+              index: _index,
+              children: const <Widget>[
+                HomePage(),
+                SchedulePage(),
+                PlazaPage(),
+                SettingsPage(),
+              ],
+            ),
           ),
         ),
       ],
@@ -247,9 +266,13 @@ class _TopBar extends StatelessWidget {
                 child: Image.asset('assets/app_icon_plain.png', fit: BoxFit.cover),
               ),
               const SizedBox(width: 8),
-              Text(
-                title,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              AnimatedSwitcher(
+                duration: AppMotion.fade,
+                child: Text(
+                  title,
+                  key: ValueKey<String>(title),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
               ),
               const Spacer(),
               Container(
